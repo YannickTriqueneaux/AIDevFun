@@ -9,6 +9,10 @@
 namespace
 {
     constexpr float PanelWidth = 420.0f;
+    constexpr float ToggleWidth = 44.0f;
+    constexpr float ToggleHeight = 48.0f;
+    constexpr float ToggleButtonSize = 24.0f;
+    constexpr float ToggleTop = 12.0f;
     constexpr float MessageWidthRatio = 0.78f;
     constexpr Engine::Color UserColor{110, 190, 255, 255};
     constexpr Engine::Color ResultColor{235, 235, 235, 255};
@@ -30,8 +34,43 @@ namespace Engine
         int screenWidth,
         int screenHeight)
     {
+        const float panelLeft =
+            static_cast<float>(screenWidth) - PanelWidth;
+        const float toggleLeft = expanded_
+            ? panelLeft - ToggleWidth
+            : static_cast<float>(screenWidth) - ToggleWidth;
+
         ui.SetNextWindowPosition(
-            {static_cast<float>(screenWidth) - PanelWidth, 0.0f},
+            {toggleLeft, ToggleTop},
+            UiCondition::Always);
+        ui.SetNextWindowSize(
+            {ToggleWidth, ToggleHeight},
+            UiCondition::Always);
+
+        const bool toggleVisible = ui.BeginPanel(
+            "##EnginePromptToggle",
+            false,
+            false,
+            false);
+        if (toggleVisible)
+        {
+            const char* toggleLabel = expanded_ ? "<" : ">";
+            if (ui.Button(
+                    toggleLabel,
+                    {ToggleButtonSize, ToggleButtonSize}))
+            {
+                expanded_ = !expanded_;
+            }
+        }
+        ui.EndPanel();
+
+        if (!expanded_)
+        {
+            return;
+        }
+
+        ui.SetNextWindowPosition(
+            {panelLeft, 0.0f},
             UiCondition::Always);
         ui.SetNextWindowSize(
             {PanelWidth, static_cast<float>(screenHeight)},
@@ -130,4 +169,3 @@ namespace Engine
         focusInput_ = true;
     }
 }
-

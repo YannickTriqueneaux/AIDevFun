@@ -55,7 +55,9 @@ On a multi-config generator, run `build/Debug/Launcher.exe`. `Game.dll` and
 
 ## Engine prompt console
 
-The engine renders a fixed conversation panel on the right side of the window.
+The engine provides a conversation panel on the right side of the window. It is
+collapsed by default. Use the persistent arrow button on the right edge to
+expand it, then use the button immediately to its left to collapse it again.
 Enter a prompt in the text box at the bottom and press `Enter` to submit it.
 
 - Submitted prompts appear on the right.

@@ -23,8 +23,8 @@ namespace Engine
         std::vector<PromptMessage> messages_;
         std::string promptInput_;
         PromptProcessor processor_;
+        bool expanded_ = false;
         bool scrollToLatest_ = true;
         bool focusInput_ = true;
     };
 }
-
