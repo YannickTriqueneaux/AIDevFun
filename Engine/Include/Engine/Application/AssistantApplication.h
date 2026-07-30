@@ -3,12 +3,16 @@
 #include "Engine/AI/OpenAISettings.h"
 #include "Engine/Core/Export.h"
 
+#include <string>
+
 namespace Engine
 {
     class ENGINE_API AssistantApplication
     {
     public:
-        explicit AssistantApplication(OpenAISettings settings);
+        AssistantApplication(
+            OpenAISettings settings,
+            std::string gameName);
         ~AssistantApplication();
 
         AssistantApplication(const AssistantApplication&) = delete;
@@ -18,6 +22,6 @@ namespace Engine
 
     private:
         OpenAISettings settings_;
+        std::string gameWindowTitle_;
     };
 }
-

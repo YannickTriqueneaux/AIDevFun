@@ -18,9 +18,8 @@ namespace Engine
         };
 
         return NamedPipeClient{}.Request(
-            GameToolsPipeName,
+            GetGameToolsPipeName(),
             request.dump(),
             30'000);
     }
 }
-

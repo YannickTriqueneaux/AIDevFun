@@ -43,14 +43,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-set(GAME_TEMPLATE_DIR "${CMAKE_SOURCE_DIR}/GameTemplate")
-set(ACTIVE_GAME_DIR "${CMAKE_SOURCE_DIR}/Workspace/Game")
+set(GAME_PROJECT "BaseGame" CACHE STRING
+    "Name of the game project under Games/ to build and edit")
+set(ACTIVE_GAME_DIR "${CMAKE_SOURCE_DIR}/Games/${GAME_PROJECT}")
 
 if(NOT EXISTS "${ACTIVE_GAME_DIR}/Source/GameModule.cpp")
-    message(STATUS "Initializing active Game workspace from GameTemplate")
-    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/Workspace")
-    file(COPY "${GAME_TEMPLATE_DIR}/" DESTINATION "${ACTIVE_GAME_DIR}")
+    message(FATAL_ERROR
+        "Invalid GAME_PROJECT '${GAME_PROJECT}'. Expected "
+        "${ACTIVE_GAME_DIR}/Source/GameModule.cpp")
 endif()
+
+message(STATUS "Active game project: ${GAME_PROJECT}")
 
 add_library(EngineImGui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -91,6 +94,8 @@ if(WIN32)
     target_link_libraries(Engine PRIVATE winhttp)
 endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
+target_compile_definitions(
+    Engine PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
 
 add_library(Game SHARED
     ${ACTIVE_GAME_DIR}/Source/GameModule.cpp
@@ -110,9 +115,15 @@ add_executable(GameHost
 )
 target_include_directories(GameHost PRIVATE GameHost/Include)
 target_link_libraries(GameHost PRIVATE Engine nlohmann_json::nlohmann_json)
+target_compile_definitions(
+    GameHost PRIVATE AITESTER_ACTIVE_GAME_DIR="${ACTIVE_GAME_DIR}")
+target_compile_definitions(
+    GameHost PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
 
 add_executable(AssistantHost AssistantHost/Source/main.cpp)
 target_link_libraries(AssistantHost PRIVATE Engine)
+target_compile_definitions(
+    AssistantHost PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
 add_custom_command(
     TARGET AssistantHost
     POST_BUILD

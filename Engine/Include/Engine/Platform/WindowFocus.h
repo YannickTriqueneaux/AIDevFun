@@ -9,8 +9,7 @@ namespace Engine
     class ENGINE_API WindowFocus
     {
     public:
-        [[nodiscard]] static bool FocusProcessWindow(
-            std::string_view processExecutableName);
+        [[nodiscard]] static bool FocusWindowByTitle(
+            std::string_view windowTitle);
     };
 }
-

@@ -8,8 +8,7 @@
 
 namespace Engine
 {
-    inline constexpr std::string_view GameToolsPipeName =
-        R"(\\.\pipe\AITester.GameTools.v1)";
+    [[nodiscard]] ENGINE_API std::string_view GetGameToolsPipeName();
 
     class ENGINE_API NamedPipeClient
     {

@@ -3,9 +3,7 @@
 #if defined(_WIN32)
     #define WIN32_LEAN_AND_MEAN
     #include <Windows.h>
-    #include <TlHelp32.h>
 
-    #include <cwchar>
     #include <string>
 #endif
 
@@ -14,19 +12,31 @@ namespace
 #if defined(_WIN32)
     struct WindowSearch
     {
-        DWORD processId = 0;
+        std::wstring expectedTitle;
         HWND window = nullptr;
     };
 
-    BOOL CALLBACK FindProcessWindow(HWND window, LPARAM parameter)
+    BOOL CALLBACK FindWindowWithTitle(HWND window, LPARAM parameter)
     {
         auto& search = *reinterpret_cast<WindowSearch*>(parameter);
+        if (!IsWindowVisible(window) ||
+            GetWindow(window, GW_OWNER) != nullptr)
+        {
+            return TRUE;
+        }
 
-        DWORD windowProcessId = 0;
-        GetWindowThreadProcessId(window, &windowProcessId);
-        if (windowProcessId == search.processId &&
-            IsWindowVisible(window) &&
-            GetWindow(window, GW_OWNER) == nullptr)
+        const int titleLength = GetWindowTextLengthW(window);
+        if (titleLength <= 0)
+        {
+            return TRUE;
+        }
+
+        std::wstring title(
+            static_cast<std::size_t>(titleLength) + 1,
+            L'\0');
+        GetWindowTextW(window, title.data(), titleLength + 1);
+        title.resize(static_cast<std::size_t>(titleLength));
+        if (title == search.expectedTitle)
         {
             search.window = window;
             return FALSE;
@@ -64,44 +74,12 @@ namespace
 
 namespace Engine
 {
-    bool WindowFocus::FocusProcessWindow(
-        std::string_view processExecutableName)
+    bool WindowFocus::FocusWindowByTitle(
+        std::string_view windowTitle)
     {
 #if defined(_WIN32)
-        const std::wstring expectedName = ToWide(processExecutableName);
-        const HANDLE snapshot = CreateToolhelp32Snapshot(
-            TH32CS_SNAPPROCESS,
-            0);
-        if (snapshot == INVALID_HANDLE_VALUE)
-        {
-            return false;
-        }
-
-        DWORD targetProcessId = 0;
-        PROCESSENTRY32W entry{};
-        entry.dwSize = sizeof(entry);
-
-        if (Process32FirstW(snapshot, &entry))
-        {
-            do
-            {
-                if (_wcsicmp(entry.szExeFile, expectedName.c_str()) == 0)
-                {
-                    targetProcessId = entry.th32ProcessID;
-                    break;
-                }
-            }
-            while (Process32NextW(snapshot, &entry));
-        }
-        CloseHandle(snapshot);
-
-        if (targetProcessId == 0)
-        {
-            return false;
-        }
-
-        WindowSearch search{.processId = targetProcessId};
-        EnumWindows(FindProcessWindow, reinterpret_cast<LPARAM>(&search));
+        WindowSearch search{.expectedTitle = ToWide(windowTitle)};
+        EnumWindows(FindWindowWithTitle, reinterpret_cast<LPARAM>(&search));
         if (search.window == nullptr)
         {
             return false;
@@ -114,9 +92,8 @@ namespace Engine
 
         return SetForegroundWindow(search.window) != FALSE;
 #else
-        static_cast<void>(processExecutableName);
+        static_cast<void>(windowTitle);
         return false;
 #endif
     }
 }
-

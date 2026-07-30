@@ -139,15 +139,13 @@ namespace
 
 GameToolService::GameToolService(
     ReloadableGame& game,
-    std::filesystem::path workspaceRoot,
+    std::filesystem::path gameRoot,
     std::filesystem::path buildDirectory)
     : game_(game),
-      workspaceRoot_(std::filesystem::weakly_canonical(workspaceRoot)),
-      gameRoot_(std::filesystem::weakly_canonical(
-          workspaceRoot_ / "Workspace" / "Game")),
+      gameRoot_(std::filesystem::weakly_canonical(gameRoot)),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       server_(
-          std::string(Engine::GameToolsPipeName),
+          std::string(Engine::GetGameToolsPipeName()),
           [this](std::string_view request)
           {
               return HandleRequest(request);
@@ -218,9 +216,19 @@ std::string GameToolService::HandleRequest(std::string_view request)
         else if (command == "list_game_files")
         {
             nlohmann::json files = nlohmann::json::array();
-            for (const auto& entry :
-                 std::filesystem::recursive_directory_iterator(gameRoot_))
+            auto iterator =
+                std::filesystem::recursive_directory_iterator(gameRoot_);
+            const auto end = std::filesystem::recursive_directory_iterator();
+            for (; iterator != end; ++iterator)
             {
+                const auto& entry = *iterator;
+                if (entry.is_directory() &&
+                    iterator.depth() == 0 &&
+                    entry.path().filename() == "build")
+                {
+                    iterator.disable_recursion_pending();
+                    continue;
+                }
                 if (entry.is_regular_file() &&
                     IsAllowedSourceExtension(entry.path()))
                 {
@@ -243,9 +251,19 @@ std::string GameToolService::HandleRequest(std::string_view request)
             }
 
             nlohmann::json matches = nlohmann::json::array();
-            for (const auto& entry :
-                 std::filesystem::recursive_directory_iterator(gameRoot_))
+            auto iterator =
+                std::filesystem::recursive_directory_iterator(gameRoot_);
+            const auto end = std::filesystem::recursive_directory_iterator();
+            for (; iterator != end; ++iterator)
             {
+                const auto& entry = *iterator;
+                if (entry.is_directory() &&
+                    iterator.depth() == 0 &&
+                    entry.path().filename() == "build")
+                {
+                    iterator.disable_recursion_pending();
+                    continue;
+                }
                 if (!entry.is_regular_file() ||
                     !IsAllowedSourceExtension(entry.path()))
                 {
@@ -399,9 +417,10 @@ std::filesystem::path GameToolService::ResolveGameFile(
     }
     for (const auto& component : relative)
     {
-        if (component == "..")
+        if (component == ".." || component == "build")
         {
-            throw std::runtime_error("Game path traversal is not allowed.");
+            throw std::runtime_error(
+                "Game path traversal and build access are not allowed.");
         }
     }
 

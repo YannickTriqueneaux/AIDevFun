@@ -45,7 +45,8 @@ namespace Engine
             if (IsKeyPressed(KEY_TAB))
             {
                 static_cast<void>(
-                    WindowFocus::FocusProcessWindow("AssistantHost.exe"));
+                    WindowFocus::FocusWindowByTitle(
+                        config_.focusWindowTitle));
             }
 
             input.Update();

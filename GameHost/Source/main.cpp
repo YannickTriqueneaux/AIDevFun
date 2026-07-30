@@ -8,6 +8,13 @@
 #include <iostream>
 #include <utility>
 
+#ifndef AITESTER_ACTIVE_GAME_DIR
+    #define AITESTER_ACTIVE_GAME_DIR ""
+#endif
+#ifndef AITESTER_GAME_PROJECT
+    #define AITESTER_GAME_PROJECT "UnknownGame"
+#endif
+
 int main(int argc, char** argv)
 {
     try
@@ -20,8 +27,17 @@ int main(int argc, char** argv)
             executableDirectory / "Logs" / "GameHost.log");
         Engine::Logger::Info("GameHost started.");
 
-        const std::filesystem::path workspaceRoot =
-            executableDirectory.parent_path().parent_path();
+        const std::filesystem::path activeGameRoot =
+            AITESTER_ACTIVE_GAME_DIR;
+        if (!std::filesystem::exists(
+                activeGameRoot / "Source" / "GameModule.cpp"))
+        {
+            throw std::runtime_error(
+                "Configured active Game project does not exist: " +
+                activeGameRoot.string());
+        }
+        Engine::Logger::Info(
+            "Active Game project: " + activeGameRoot.string());
         ReloadableGame game(
             executableDirectory / "Game.dll",
             executableDirectory / "GameHotReload");
@@ -32,15 +48,18 @@ int main(int argc, char** argv)
             .windowWidth = gameConfig.windowWidth,
             .windowHeight = gameConfig.windowHeight,
             .targetFramesPerSecond = gameConfig.targetFramesPerSecond,
-            .windowTitle = gameConfig.windowTitle,
+            .windowTitle =
+                std::string(AITESTER_GAME_PROJECT) + " - Game",
+            .focusWindowTitle =
+                std::string(AITESTER_GAME_PROJECT) + " - AI Assistant",
             .verticalSync = gameConfig.verticalSync
         };
 
         Engine::Application application(std::move(config));
         GameToolService tools(
             game,
-            workspaceRoot,
-            workspaceRoot / "build");
+            activeGameRoot,
+            executableDirectory.parent_path());
         Engine::Logger::Info("Game tools IPC server is ready.");
         application.Run(game);
         Engine::Logger::Info("GameHost application loop ended.");

@@ -17,14 +17,19 @@ namespace
 
 namespace Engine
 {
-    AssistantApplication::AssistantApplication(OpenAISettings settings)
-        : settings_(std::move(settings))
+    AssistantApplication::AssistantApplication(
+        OpenAISettings settings,
+        std::string gameName)
+        : settings_(std::move(settings)),
+          gameWindowTitle_(gameName + " - Game")
     {
+        const std::string assistantWindowTitle =
+            gameName + " - AI Assistant";
         SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
         InitWindow(
             AssistantWindowWidth,
             AssistantWindowHeight,
-            "Game AI Assistant");
+            assistantWindowTitle.c_str());
         SetTargetFPS(60);
     }
 
@@ -50,7 +55,8 @@ namespace Engine
             if (IsKeyPressed(KEY_TAB))
             {
                 static_cast<void>(
-                    WindowFocus::FocusProcessWindow("GameHost.exe"));
+                    WindowFocus::FocusWindowByTitle(
+                        gameWindowTitle_));
             }
 
             renderer.BeginFrame({12, 14, 20, 255});

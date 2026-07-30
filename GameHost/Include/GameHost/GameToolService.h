@@ -13,7 +13,7 @@ class GameToolService
 public:
     GameToolService(
         ReloadableGame& game,
-        std::filesystem::path workspaceRoot,
+        std::filesystem::path gameRoot,
         std::filesystem::path buildDirectory);
 
 private:
@@ -23,11 +23,9 @@ private:
     [[nodiscard]] std::string BuildGame();
 
     ReloadableGame& game_;
-    std::filesystem::path workspaceRoot_;
     std::filesystem::path gameRoot_;
     std::filesystem::path buildDirectory_;
     std::mutex buildMutex_;
     std::string lastBuildOutput_ = "No Game build has run yet.";
     Engine::NamedPipeServer server_;
 };
-

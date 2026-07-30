@@ -10,13 +10,9 @@ Engine/
   Include/Engine/   Stable public engine API
   Source/           Persistent raylib-backed runtime
 
-GameTemplate/
-  Include/Game/     Reloadable game types and configuration
-  Source/           Versioned clean starting point for a new game
-
-Workspace/Game/
-  Include/Game/     Active, local game headers
-  Source/           Active input, rendering, behavior, and DLL exports
+Games/
+  BaseGame/         Versioned clean starting game
+  CurrentGame/      Example local game currently being iterated
 
 Launcher/
   Source/           Process orchestrator
@@ -38,11 +34,16 @@ implements gameplay behavior. `Launcher` loads it through a versioned API and
 destroys all game-owned objects before unloading it. This is the foundation for
 loading uniquely named DLL generations during hot reload.
 
-`GameTemplate/` is committed and remains the distributable starting game.
-`Workspace/Game/` is ignored by Git and contains the game currently being
-iterated. On the first CMake configure, the active workspace is copied from the
-template. Existing workspace files are never overwritten automatically. To
-start over, remove `Workspace/Game/` manually and configure again.
+Each directory directly under `Games/` is an independent project. `BaseGame/`
+is committed as the distributable starting point. Other game directories are
+local by default and ignored by Git. Once selected, the build, hot reload, and
+assistant tools all point directly to `Games/<game-name>/`; there is no
+intermediate workspace copy.
+
+Each project owns its build directory at `Games/<game-name>/build/`. These
+directories and `Games/.Backups/` are ignored by Git. The ignore rules
+explicitly keep `Games/BaseGame/` source tracked while still excluding its
+local build products.
 
 ## Controls
 
@@ -62,16 +63,24 @@ Requirements:
 - Git
 
 ```powershell
-cmake -S . -B build
-cmake --build build --config Debug
+cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
+cmake --build Games/MyGame/build --config Debug
 ```
 
-On a multi-config generator, run `build/Debug/Launcher.exe`. `Game.dll` and
-`Engine.dll` are emitted beside it.
+On a multi-config generator, run
+`Games/MyGame/build/Debug/Launcher.exe`. `Game.dll` and `Engine.dll` are emitted
+beside it.
 
-For the normal Windows development loop, run `dev.bat` from the repository
-root. It stops all project processes, configures CMake, builds Debug, and starts
-the launcher only after a successful build.
+For the normal Windows development loop, run `Start.bat` from the repository
+root. It lists every valid directory under `Games/`, asks which game to use,
+configures CMake for that project, builds Debug, and starts the launcher.
+`dev.bat <game-name>` remains available as a non-interactive rebuild.
+
+Before listing games, `Start.bat` validates
+`AssistantHost/Config/settings.json`. When no API key is configured, it opens
+the [OpenAI API key page](https://platform.openai.com/api-keys), displays the
+same URL in the terminal, and securely prompts for a key without echoing it.
+The settings file is then created locally with `gpt-5.5` as its default model.
 
 ## Engine prompt console
 
@@ -80,6 +89,19 @@ while `AssistantHost` owns the OpenAI conversation and operational logs. Enter
 a prompt in the assistant text box and press `Enter` to submit it.
 
 Press `Tab` in either window to switch focus to the other process.
+The focus target includes the game name, so `Tab` stays within its own session
+when several games are open.
+
+Multiple games can run simultaneously. Each session has:
+
+- its own build and executable directory;
+- its own `Game.dll` hot-reload generations;
+- its own logs;
+- a game-specific IPC pipe;
+- windows titled `<game-name> - Game` and `<game-name> - AI Assistant`.
+
+Starting or rebuilding one game stops only processes launched from that game's
+build directory. Other game sessions remain open.
 
 - Submitted prompts appear on the right.
 - Results and engine information appear on the left.
@@ -111,25 +133,27 @@ module. It can use a local named-pipe tool service hosted by `GameHost`.
 
 Available controlled tools:
 
-- list and read C++ files under `Workspace/Game/`, including batch reads;
+- list and read C++ files under the selected `Games/<game-name>/`, including batch reads;
 - search exact text in Game source;
 - apply one exact-text replacement or a validated batch of ordered replacements;
 - build only the Debug `Game` target;
 - inspect the latest build output;
 - request and inspect a generation-based Game DLL reload.
 
-Paths are canonicalized and confined to `Workspace/Game/`. Only `.cpp`, `.h`, `.hpp`, and
+Paths are canonicalized and confined to the selected game directory. Only `.cpp`, `.h`, `.hpp`, and
 `.inl` files are writable, file and message sizes are limited, arbitrary shell
-commands are not exposed, and Game builds use a fixed CMake command.
+commands are not exposed, and Game builds use a fixed CMake command. The
+project's `build/` subtree is explicitly excluded from listing, searching,
+reading, and patching.
 
 ## Logs
 
 Each process creates a fresh log file at startup:
 
 ```text
-build/Debug/Logs/Launcher.log
-build/Debug/Logs/GameHost.log
-build/Debug/Logs/AssistantHost.log
+Games/<game-name>/build/Debug/Logs/Launcher.log
+Games/<game-name>/build/Debug/Logs/GameHost.log
+Games/<game-name>/build/Debug/Logs/AssistantHost.log
 ```
 
 The assistant log records prompts, response IDs, streaming status, tool rounds,

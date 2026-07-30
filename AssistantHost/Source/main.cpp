@@ -6,6 +6,10 @@
 #include <filesystem>
 #include <iostream>
 
+#ifndef AITESTER_GAME_PROJECT
+    #define AITESTER_GAME_PROJECT "UnknownGame"
+#endif
+
 int main(int argc, char** argv)
 {
     try
@@ -24,7 +28,9 @@ int main(int argc, char** argv)
             ". API key configured: " +
             (settings.openAI.apiKey.empty() ? "no." : "yes."));
 
-        Engine::AssistantApplication application(settings.openAI);
+        Engine::AssistantApplication application(
+            settings.openAI,
+            AITESTER_GAME_PROJECT);
         application.Run();
         Engine::Logger::Info("AssistantHost application loop ended.");
     }

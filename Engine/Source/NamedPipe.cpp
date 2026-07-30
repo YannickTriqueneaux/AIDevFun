@@ -7,6 +7,10 @@
 #include <thread>
 #include <utility>
 
+#ifndef AITESTER_GAME_PROJECT
+    #define AITESTER_GAME_PROJECT "UnknownGame"
+#endif
+
 #if defined(_WIN32)
     #define WIN32_LEAN_AND_MEAN
     #include <Windows.h>
@@ -120,6 +124,12 @@ namespace
 
 namespace Engine
 {
+    std::string_view GetGameToolsPipeName()
+    {
+        return R"(\\.\pipe\AITester.)" AITESTER_GAME_PROJECT
+            R"(.GameTools.v1)";
+    }
+
     struct NamedPipeServer::Impl
     {
         std::string pipeName;

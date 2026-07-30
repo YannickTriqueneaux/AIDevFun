@@ -14,6 +14,7 @@ namespace Engine
         int windowHeight = 720;
         int targetFramesPerSecond = 144;
         std::string windowTitle = "Engine Application";
+        std::string focusWindowTitle;
         bool verticalSync = true;
     };
 
