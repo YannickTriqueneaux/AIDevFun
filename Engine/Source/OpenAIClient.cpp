@@ -217,9 +217,29 @@ namespace
             }
             else if (type == "response.completed")
             {
+                const nlohmann::json& completedResponse =
+                    event.at("response");
                 if (response.id.empty())
                 {
-                    response.id = event.at("response").value("id", "");
+                    response.id = completedResponse.value("id", "");
+                }
+                if (completedResponse.contains("usage") &&
+                    !completedResponse.at("usage").is_null())
+                {
+                    const nlohmann::json& usage =
+                        completedResponse.at("usage");
+                    response.usage.inputTokens =
+                        usage.value("input_tokens", 0ULL);
+                    response.usage.outputTokens =
+                        usage.value("output_tokens", 0ULL);
+                    if (usage.contains("input_tokens_details") &&
+                        !usage.at("input_tokens_details").is_null())
+                    {
+                        response.usage.cachedInputTokens =
+                            usage.at("input_tokens_details").value(
+                                "cached_tokens",
+                                0ULL);
+                    }
                 }
                 onEvent({Engine::OpenAIStreamEventType::Status, "Response completed."});
             }
@@ -482,6 +502,15 @@ namespace Engine
     const std::string& OpenAIClient::GetModel() const
     {
         return settings_.model;
+    }
+
+    OpenAICostEstimate OpenAIClient::EstimateCost(
+        const OpenAITokenUsage& usage) const
+    {
+        return EstimateOpenAICost(
+            settings_.model,
+            settings_.pricing,
+            usage);
     }
 
     OpenAIResponse OpenAIClient::CreateResponse(

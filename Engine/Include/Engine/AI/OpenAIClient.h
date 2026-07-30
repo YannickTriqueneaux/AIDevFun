@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/AI/OpenAISettings.h"
+#include "Engine/AI/OpenAIPricing.h"
 
 #include <string>
 #include <string_view>
@@ -37,6 +38,7 @@ namespace Engine
         std::string id;
         std::string text;
         std::vector<ToolCall> toolCalls;
+        OpenAITokenUsage usage;
     };
 
     struct OpenAIToolOutput
@@ -52,6 +54,8 @@ namespace Engine
 
         [[nodiscard]] bool IsConfigured() const;
         [[nodiscard]] const std::string& GetModel() const;
+        [[nodiscard]] OpenAICostEstimate EstimateCost(
+            const OpenAITokenUsage& usage) const;
         [[nodiscard]] OpenAIResponse CreateResponse(
             std::string_view instructions,
             std::string_view prompt,

@@ -8,6 +8,8 @@
 #include <iterator>
 #include <chrono>
 #include <future>
+#include <iomanip>
+#include <sstream>
 #include <utility>
 
 namespace
@@ -21,6 +23,41 @@ namespace
     constexpr Engine::Color UserColor{110, 190, 255, 255};
     constexpr Engine::Color ResultColor{235, 235, 235, 255};
     constexpr Engine::Color InformationColor{145, 150, 165, 255};
+
+    std::string FormatTokens(std::uint64_t tokens)
+    {
+        std::string digits = std::to_string(tokens);
+        for (std::ptrdiff_t position =
+                 static_cast<std::ptrdiff_t>(digits.size()) - 3;
+             position > 0;
+             position -= 3)
+        {
+            digits.insert(static_cast<std::size_t>(position), ",");
+        }
+        return digits;
+    }
+
+    std::string FormatCost(
+        std::string_view label,
+        const Engine::OpenAITokenUsage& usage,
+        bool costAvailable,
+        double costUsd)
+    {
+        std::ostringstream stream;
+        stream << label << ": ";
+        if (costAvailable)
+        {
+            stream << "~US$" << std::fixed
+                   << std::setprecision(costUsd < 0.01 ? 6 : 4)
+                   << costUsd;
+        }
+        else
+        {
+            stream << "cost unavailable";
+        }
+        stream << " (" << FormatTokens(usage.TotalTokens()) << " tokens)";
+        return stream.str();
+    }
 }
 
 namespace Engine
@@ -101,6 +138,25 @@ namespace Engine
         if (panelVisible)
         {
             ui.Text("Activity", {210, 215, 225, 255});
+            if (hasCompletedPrompt_)
+            {
+                ui.TextWrapped(
+                    FormatCost(
+                        "Last prompt",
+                        lastPromptUsage_,
+                        lastPromptCostAvailable_,
+                        lastPromptCostUsd_),
+                    ui.GetAvailableWidth(),
+                    {255, 203, 90, 255});
+                ui.TextWrapped(
+                    FormatCost(
+                        "Session total",
+                        sessionUsage_,
+                        sessionCostAvailable_,
+                        sessionCostUsd_),
+                    ui.GetAvailableWidth(),
+                    {255, 203, 90, 255});
+            }
             if (ui.BeginChild(
                     "PromptActivity",
                     {0.0f, 130.0f},
@@ -242,12 +298,32 @@ namespace Engine
             return;
         }
 
-        std::vector<PromptMessage> results = pendingRequest_.get();
+        PromptProcessResult result = pendingRequest_.get();
+        lastPromptUsage_ = result.usage;
+        sessionUsage_ += result.usage;
+        lastPromptCostUsd_ = result.estimatedCostUsd;
+        sessionCostUsd_ += result.estimatedCostUsd;
+        lastPromptCostAvailable_ = result.costAvailable;
+        sessionCostAvailable_ &= result.costAvailable;
+        hasCompletedPrompt_ = true;
+
         messages_.insert(
             messages_.end(),
-            std::make_move_iterator(results.begin()),
-            std::make_move_iterator(results.end()));
+            std::make_move_iterator(result.messages.begin()),
+            std::make_move_iterator(result.messages.end()));
         scrollToLatest_ = true;
+        Logger::Info(
+            FormatCost(
+                "Completed prompt estimated cost",
+                lastPromptUsage_,
+                lastPromptCostAvailable_,
+                lastPromptCostUsd_) +
+            "; " +
+            FormatCost(
+                "session",
+                sessionUsage_,
+                sessionCostAvailable_,
+                sessionCostUsd_));
         Logger::Info("Pending OpenAI request joined by the UI thread.");
     }
 

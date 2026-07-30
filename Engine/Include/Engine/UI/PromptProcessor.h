@@ -9,6 +9,15 @@
 
 namespace Engine
 {
+    struct PromptProcessResult
+    {
+        std::vector<PromptMessage> messages;
+        OpenAITokenUsage usage;
+        bool usageReported = false;
+        bool costAvailable = false;
+        double estimatedCostUsd = 0.0;
+    };
+
     class PromptProcessor
     {
     public:
@@ -16,7 +25,7 @@ namespace Engine
 
         [[nodiscard]] bool IsConfigured() const;
         [[nodiscard]] const std::string& GetModel() const;
-        [[nodiscard]] std::vector<PromptMessage> Process(
+        [[nodiscard]] PromptProcessResult Process(
             std::string_view prompt,
             const OpenAIStreamCallback& onEvent);
 

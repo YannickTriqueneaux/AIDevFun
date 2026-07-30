@@ -18,6 +18,12 @@ prepared for distribution.
 > [LICENSE](LICENSE) and [CONTRIBUTING.md](CONTRIBUTING.md) before using the
 > project.
 
+![A Snake mini-game running beside its AI development assistant](docs/images/game-and-ai-assistant.png)
+
+*A game created and hot-reloaded from the assistant while the playable session
+stays open. The assistant also reports the latest prompt and session token-cost
+estimates.*
+
 ## The workflow
 
 ```text
@@ -229,7 +235,16 @@ Example:
 {
   "openai": {
     "apiKey": "your-api-key",
-    "model": "gpt-5.5"
+    "model": "gpt-5.5",
+    "pricing": {
+      "model": "gpt-5.5",
+      "inputUsdPerMillion": 5.0,
+      "cachedInputUsdPerMillion": 0.5,
+      "outputUsdPerMillion": 30.0,
+      "longContextThreshold": 272000,
+      "longContextInputMultiplier": 2.0,
+      "longContextOutputMultiplier": 1.5
+    }
   }
 }
 ```
@@ -237,6 +252,13 @@ Example:
 The file is ignored by Git and copied into a game's build only when
 `AssistantHost` is built. Building only `Game.dll` does not touch it. API keys
 and HTTP authorization headers are never written to application logs.
+
+The Responses API reports real input, cached-input, and output token usage, but
+OpenAI does not currently expose an official pricing API. Token prices are
+therefore configuration data rather than compiled constants. AssistantHost
+uses them to display an estimated cost for the latest completed prompt and for
+the complete AssistantHost session. Update the pricing block when OpenAI
+changes a model's rates.
 
 ## Manual builds
 

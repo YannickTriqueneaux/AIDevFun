@@ -80,6 +80,7 @@ add_library(Engine SHARED
     Engine/Source/Logger.cpp
     Engine/Source/NamedPipe.cpp
     Engine/Source/OpenAIClient.cpp
+    Engine/Source/OpenAIPricing.cpp
     Engine/Source/PromptConsole.cpp
     Engine/Source/PromptProcessor.cpp
     Engine/Source/Renderer2D.cpp

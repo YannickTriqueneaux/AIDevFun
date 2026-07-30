@@ -6,7 +6,36 @@ param(
 $ErrorActionPreference = "Stop"
 $apiKeysUrl = "https://platform.openai.com/api-keys"
 $defaultModel = "gpt-5.5"
+$defaultPricing = @{
+    model = "gpt-5.5"
+    inputUsdPerMillion = 5.0
+    cachedInputUsdPerMillion = 0.5
+    outputUsdPerMillion = 30.0
+    longContextThreshold = 272000
+    longContextInputMultiplier = 2.0
+    longContextOutputMultiplier = 1.5
+}
 $settings = $null
+
+function Save-OpenAISettings {
+    param(
+        [string] $ApiKey,
+        [string] $Model,
+        [object] $Pricing
+    )
+
+    $parentDirectory = Split-Path -Parent $SettingsPath
+    New-Item -ItemType Directory -Path $parentDirectory -Force | Out-Null
+    @{
+        openai = @{
+            apiKey = $ApiKey
+            model = $Model
+            pricing = $Pricing
+        }
+    } |
+        ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath $SettingsPath -Encoding UTF8
+}
 
 if (Test-Path -LiteralPath $SettingsPath) {
     try {
@@ -17,6 +46,18 @@ if (Test-Path -LiteralPath $SettingsPath) {
             -not [string]::IsNullOrWhiteSpace($configuredKey) -and
             $configuredKey -ne "your-api-key"
         ) {
+            $configuredModel = [string] $settings.openai.model
+            if ([string]::IsNullOrWhiteSpace($configuredModel)) {
+                $configuredModel = $defaultModel
+            }
+            $configuredPricing = $settings.openai.pricing
+            if ($null -eq $configuredPricing) {
+                $configuredPricing = $defaultPricing
+            }
+            Save-OpenAISettings `
+                -ApiKey $configuredKey `
+                -Model $configuredModel `
+                -Pricing $configuredPricing
             exit 0
         }
     }
@@ -66,16 +107,9 @@ if (
     $model = [string] $settings.openai.model
 }
 
-$parentDirectory = Split-Path -Parent $SettingsPath
-New-Item -ItemType Directory -Path $parentDirectory -Force | Out-Null
-
-@{
-    openai = @{
-        apiKey = $apiKey
-        model = $model
-    }
-} |
-    ConvertTo-Json -Depth 3 |
-    Set-Content -LiteralPath $SettingsPath -Encoding UTF8
+Save-OpenAISettings `
+    -ApiKey $apiKey `
+    -Model $model `
+    -Pricing $defaultPricing
 
 Write-Host "OpenAI settings saved to AssistantHost/Config/settings.json."

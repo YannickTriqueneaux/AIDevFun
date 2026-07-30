@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Engine/AI/OpenAIPricing.h"
+
 #include <string>
 
 namespace Engine
@@ -8,6 +10,7 @@ namespace Engine
     {
         std::string apiKey;
         std::string model = "gpt-5.5";
+        OpenAIPricingSettings pricing;
 
         [[nodiscard]] bool IsConfigured() const
         {
@@ -15,4 +18,3 @@ namespace Engine
         }
     };
 }
-

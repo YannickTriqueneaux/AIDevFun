@@ -54,10 +54,26 @@ namespace Engine
         return client_.GetModel();
     }
 
-    std::vector<PromptMessage> PromptProcessor::Process(
+    PromptProcessResult PromptProcessor::Process(
         std::string_view prompt,
         const OpenAIStreamCallback& onEvent)
     {
+        PromptProcessResult processResult;
+        const auto accountForResponse =
+            [this, &processResult](const OpenAIResponse& response)
+            {
+                const bool firstReportedUsage =
+                    !processResult.usageReported;
+                processResult.usage += response.usage;
+                const OpenAICostEstimate estimate =
+                    client_.EstimateCost(response.usage);
+                processResult.costAvailable = firstReportedUsage
+                    ? estimate.available
+                    : processResult.costAvailable && estimate.available;
+                processResult.estimatedCostUsd += estimate.usd;
+                processResult.usageReported = true;
+            };
+
         try
         {
             Logger::Info(
@@ -68,6 +84,7 @@ namespace Engine
                 prompt,
                 previousResponseId_,
                 onEvent);
+            accountForResponse(response);
 
             for (int round = 0;
                  !response.toolCalls.empty() && round < MaximumToolRounds;
@@ -136,6 +153,7 @@ namespace Engine
                     response.id,
                     onEvent,
                     !finalToolRound);
+                accountForResponse(response);
             }
 
             if (!response.toolCalls.empty())
@@ -149,16 +167,17 @@ namespace Engine
             previousResponseId_ = response.id;
             Logger::Info(
                 "OpenAI response completed. Response ID: " + response.id);
-            return {};
+            return processResult;
         }
         catch (const std::exception& exception)
         {
             Logger::Error(
                 std::string("OpenAI request failed: ") + exception.what());
-            return {{
+            processResult.messages.push_back({
                 PromptMessageRole::Information,
                 std::string("Request failed: ") + exception.what()
-            }};
+            });
+            return processResult;
         }
     }
 }
