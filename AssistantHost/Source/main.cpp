@@ -6,8 +6,8 @@
 #include <filesystem>
 #include <iostream>
 
-#ifndef AITESTER_GAME_PROJECT
-    #define AITESTER_GAME_PROJECT "UnknownGame"
+#ifndef MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
+    #define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "UnknownGame"
 #endif
 
 int main(int argc, char** argv)
@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 
         Engine::AssistantApplication application(
             settings.openAI,
-            AITESTER_GAME_PROJECT);
+            MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT);
         application.Run();
         Engine::Logger::Info("AssistantHost application loop ended.");
     }

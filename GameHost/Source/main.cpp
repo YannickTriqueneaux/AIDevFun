@@ -8,11 +8,11 @@
 #include <iostream>
 #include <utility>
 
-#ifndef AITESTER_ACTIVE_GAME_DIR
-    #define AITESTER_ACTIVE_GAME_DIR ""
+#ifndef MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR
+    #define MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR ""
 #endif
-#ifndef AITESTER_GAME_PROJECT
-    #define AITESTER_GAME_PROJECT "UnknownGame"
+#ifndef MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
+    #define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "UnknownGame"
 #endif
 
 int main(int argc, char** argv)
@@ -28,7 +28,7 @@ int main(int argc, char** argv)
         Engine::Logger::Info("GameHost started.");
 
         const std::filesystem::path activeGameRoot =
-            AITESTER_ACTIVE_GAME_DIR;
+            MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR;
         if (!std::filesystem::exists(
                 activeGameRoot / "Source" / "GameModule.cpp"))
         {
@@ -49,9 +49,10 @@ int main(int argc, char** argv)
             .windowHeight = gameConfig.windowHeight,
             .targetFramesPerSecond = gameConfig.targetFramesPerSecond,
             .windowTitle =
-                std::string(AITESTER_GAME_PROJECT) + " - Game",
+                std::string(MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT) + " - Game",
             .focusWindowTitle =
-                std::string(AITESTER_GAME_PROJECT) + " - AI Assistant",
+                std::string(MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT) +
+                    " - AI Assistant",
             .verticalSync = gameConfig.verticalSync
         };
 

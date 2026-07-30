@@ -7,8 +7,8 @@
 #include <thread>
 #include <utility>
 
-#ifndef AITESTER_GAME_PROJECT
-    #define AITESTER_GAME_PROJECT "UnknownGame"
+#ifndef MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
+    #define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "UnknownGame"
 #endif
 
 #if defined(_WIN32)
@@ -126,7 +126,8 @@ namespace Engine
 {
     std::string_view GetGameToolsPipeName()
     {
-        return R"(\\.\pipe\AITester.)" AITESTER_GAME_PROJECT
+        return R"(\\.\pipe\MakeYourOwnGame.AI.)"
+            MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
             R"(.GameTools.v1)";
     }
 

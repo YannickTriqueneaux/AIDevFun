@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(ENGINE_STATIC)
     #if defined(ENGINE_BUILD)
         #define ENGINE_API __declspec(dllexport)
     #else
@@ -9,4 +9,3 @@
 #else
     #define ENGINE_API
 #endif
-

@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(ProceduralRaylibStarter LANGUAGES CXX)
+project(MakeYourOwnGame.AI LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 include(FetchContent)
 
@@ -96,7 +100,7 @@ if(WIN32)
 endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 target_compile_definitions(
-    Engine PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
+    Engine PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
 add_library(Game SHARED
     ${ACTIVE_GAME_DIR}/Source/GameModule.cpp
@@ -117,14 +121,14 @@ add_executable(GameHost
 target_include_directories(GameHost PRIVATE GameHost/Include)
 target_link_libraries(GameHost PRIVATE Engine nlohmann_json::nlohmann_json)
 target_compile_definitions(
-    GameHost PRIVATE AITESTER_ACTIVE_GAME_DIR="${ACTIVE_GAME_DIR}")
+    GameHost PRIVATE MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR="${ACTIVE_GAME_DIR}")
 target_compile_definitions(
-    GameHost PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
+    GameHost PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
 add_executable(AssistantHost AssistantHost/Source/main.cpp)
 target_link_libraries(AssistantHost PRIVATE Engine)
 target_compile_definitions(
-    AssistantHost PRIVATE AITESTER_GAME_PROJECT="${GAME_PROJECT}")
+    AssistantHost PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 add_custom_command(
     TARGET AssistantHost
     POST_BUILD
@@ -139,7 +143,33 @@ if(WIN32)
     target_link_libraries(Launcher PRIVATE shell32)
 endif()
 
-foreach(target Engine Game GameHost AssistantHost Launcher)
+add_executable(GameRelease WIN32
+    GameHost/Source/ReleaseMain.cpp
+    Engine/Source/Application.cpp
+    Engine/Source/InputSystem.cpp
+    Engine/Source/Renderer2D.cpp
+    Engine/Source/UiSystem.cpp
+    Engine/Source/WindowFocus.cpp
+    ${ACTIVE_GAME_DIR}/Source/Game.cpp
+    ${ACTIVE_GAME_DIR}/Source/GameInput.cpp
+    ${ACTIVE_GAME_DIR}/Source/Player.cpp
+)
+target_include_directories(GameRelease PRIVATE
+    Engine/Include
+    ${ACTIVE_GAME_DIR}/Include
+)
+target_link_libraries(GameRelease PRIVATE raylib EngineImGui)
+target_compile_definitions(GameRelease PRIVATE
+    ENGINE_STATIC
+    GAME_RELEASE_BUILD
+    MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}"
+)
+set_target_properties(GameRelease PROPERTIES
+    OUTPUT_NAME "${GAME_PROJECT}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${ACTIVE_GAME_DIR}/Release"
+)
+
+foreach(target Engine Game GameHost AssistantHost Launcher GameRelease)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
     else()

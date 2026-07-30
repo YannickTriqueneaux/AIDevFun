@@ -277,17 +277,26 @@ Games/MyGame/build/Debug/Launcher.exe
 
 ## Shipping a game
 
-A game can be compiled with optimizations using:
+Run the interactive release script:
 
-```powershell
-cmake --build Games/MyGame/build --config Release
+```bat
+Release.bat
 ```
 
-The runtime is native C++, so the finished game does not require interpreted
-game scripts. Distribution packaging, store integration, metadata, icons,
-installers, and removal or customization of development-only tools remain
-project-specific steps; the repository does not yet provide a one-click
-shipping package.
+It asks which game to release and produces:
+
+```text
+Games/<game-name>/Release/<game-name>.exe
+```
+
+The Release target is a native, optimized, monolithic executable. It statically
+links the Engine and selected Game and does not ship GameHost, AssistantHost,
+Launcher, `Game.dll`, development logs, or hot-reload code. The development FPS
+counter is compiled out. `Release.bat` prints the absolute executable path when
+the build succeeds.
+
+Distribution metadata, icons, installers, store SDKs, and platform packaging
+remain game-specific responsibilities.
 
 Commercial distribution is subject to [LICENSE](LICENSE), including the fixed
 CAD $1.00 royalty for each paid copy sold.

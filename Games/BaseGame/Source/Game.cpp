@@ -39,6 +39,8 @@ void ProceduralGame::Render(Engine::Renderer2D& renderer) const
 
     player_.Render(renderer);
     player_.RenderHud(renderer);
+#if !defined(GAME_RELEASE_BUILD)
     renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
+#endif
 
 }

@@ -80,7 +80,7 @@ namespace
         Engine::OpenAIResponse& response)
     {
         WinHttpHandle session(WinHttpOpen(
-            L"ProceduralRaylibEngine/1.0",
+            L"MakeYourOwnGame.AI/1.0",
             WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
             WINHTTP_NO_PROXY_NAME,
             WINHTTP_NO_PROXY_BYPASS,
