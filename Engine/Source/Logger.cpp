@@ -43,7 +43,7 @@ namespace Engine
         std::scoped_lock lock(LogMutex);
         std::filesystem::create_directories(file.parent_path());
         LogStream.close();
-        LogStream.open(file, std::ios::out | std::ios::trunc);
+        LogStream.open(file, std::ios::out | std::ios::app);
     }
 
     void Logger::Info(std::string_view message)
@@ -70,4 +70,3 @@ namespace Engine
         }
     }
 }
-

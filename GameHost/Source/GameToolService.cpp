@@ -4,13 +4,17 @@
 
 #include "Engine/Core/Logger.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <map>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -138,12 +142,16 @@ namespace
 }
 
 GameToolService::GameToolService(
-    ReloadableGame& game,
+    ReloadableGame* game,
     std::filesystem::path gameRoot,
-    std::filesystem::path buildDirectory)
+    std::filesystem::path buildDirectory,
+    std::filesystem::path runtimeDirectory,
+    bool recoveryMode)
     : game_(game),
       gameRoot_(std::filesystem::weakly_canonical(gameRoot)),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
+      runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
+      recoveryMode_(recoveryMode),
       server_(
           std::string(Engine::GetGameToolsPipeName()),
           [this](std::string_view request)
@@ -151,6 +159,11 @@ GameToolService::GameToolService(
               return HandleRequest(request);
           })
 {
+}
+
+bool GameToolService::IsLaunchRequested() const
+{
+    return launchRequested_;
 }
 
 std::string GameToolService::HandleRequest(std::string_view request)
@@ -169,8 +182,11 @@ std::string GameToolService::HandleRequest(std::string_view request)
         {
             result = {
                 {"service", "GameHost tools"},
-                {"version", 1},
-                {"reloadStatus", game_.GetReloadStatus()}
+                {"version", 2},
+                {"recoveryMode", recoveryMode_},
+                {"reloadStatus", game_
+                    ? game_->GetReloadStatus()
+                    : "Game is stopped for crash recovery."}
             };
         }
         else if (command == "read_game_file")
@@ -378,12 +394,35 @@ std::string GameToolService::HandleRequest(std::string_view request)
         }
         else if (command == "reload_game")
         {
-            game_.RequestReload();
+            if (!game_)
+            {
+                throw std::runtime_error(
+                    "Game is not running. Build the repair, then use launch_game.");
+            }
+            game_->RequestReload();
             result = {{"status", "Reload requested on the game thread."}};
         }
         else if (command == "get_reload_status")
         {
-            result = {{"status", game_.GetReloadStatus()}};
+            result = {{"status", game_
+                ? game_->GetReloadStatus()
+                : "Game is stopped for crash recovery."}};
+        }
+        else if (command == "inspect_crash_diagnostics")
+        {
+            result = nlohmann::json::parse(ReadCrashDiagnostics());
+        }
+        else if (command == "launch_game")
+        {
+            if (!recoveryMode_)
+            {
+                throw std::runtime_error(
+                    "launch_game is only available in crash recovery mode.");
+            }
+            launchRequested_ = true;
+            result = {
+                {"status", "Repair accepted. Launcher will start the Game."}
+            };
         }
         else
         {
@@ -404,6 +443,87 @@ std::string GameToolService::HandleRequest(std::string_view request)
             {"error", exception.what()}
         }).dump();
     }
+}
+
+std::string GameToolService::ReadCrashDiagnostics() const
+{
+    constexpr std::size_t MaximumDiagnosticText = 256 * 1024;
+    nlohmann::json reports = nlohmann::json::array();
+
+    const auto appendRecentFiles = [&reports](
+        const std::filesystem::path& directory,
+        std::string_view kind,
+        std::string_view extension)
+    {
+        if (!std::filesystem::exists(directory))
+        {
+            return;
+        }
+
+        std::vector<std::filesystem::directory_entry> entries;
+        for (const auto& entry :
+             std::filesystem::directory_iterator(directory))
+        {
+            if (entry.is_regular_file() &&
+                entry.path().extension() == extension)
+            {
+                entries.push_back(entry);
+            }
+        }
+        std::ranges::sort(
+            entries,
+            std::greater{},
+            [](const auto& entry)
+            {
+                return entry.last_write_time();
+            });
+        if (entries.size() > 8)
+        {
+            entries.resize(8);
+        }
+
+        for (const auto& entry : entries)
+        {
+            std::ifstream stream(entry.path(), std::ios::binary);
+            if (!stream)
+            {
+                continue;
+            }
+            const std::uintmax_t fileSize =
+                std::filesystem::file_size(entry.path());
+            const std::size_t readSize = static_cast<std::size_t>(
+                std::min<std::uintmax_t>(
+                    fileSize,
+                    MaximumDiagnosticText));
+            if (fileSize > readSize)
+            {
+                stream.seekg(
+                    static_cast<std::streamoff>(fileSize - readSize));
+            }
+            std::string content(readSize, '\0');
+            stream.read(
+                content.data(),
+                static_cast<std::streamsize>(readSize));
+            content.resize(static_cast<std::size_t>(stream.gcount()));
+            if (fileSize > readSize)
+            {
+                content.insert(0, "[older content truncated]\n");
+            }
+            reports.push_back({
+                {"kind", kind},
+                {"file", entry.path().filename().string()},
+                {"content", std::move(content)}
+            });
+        }
+    };
+
+    appendRecentFiles(runtimeDirectory_ / "Crashes", "crash_report", ".txt");
+    appendRecentFiles(runtimeDirectory_ / "Logs", "process_log", ".log");
+    return nlohmann::json({
+        {"recoveryMode", recoveryMode_},
+        {"runtimeDirectory", runtimeDirectory_.generic_string()},
+        {"reports", std::move(reports)}
+    }).dump();
 }
 
 std::filesystem::path GameToolService::ResolveGameFile(

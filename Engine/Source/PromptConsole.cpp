@@ -8,6 +8,7 @@
 #include <iterator>
 #include <chrono>
 #include <future>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <utility>
@@ -84,6 +85,7 @@ namespace Engine
     {
         PollStreamEvents();
         PollPendingRequest();
+        PollAutomaticPrompt();
 
         const float effectivePanelWidth = options_.fillWindow
             ? static_cast<float>(screenWidth)
@@ -238,6 +240,51 @@ namespace Engine
             }
         }
         ui.EndPanel();
+    }
+
+    void PromptConsole::PollAutomaticPrompt()
+    {
+        if (options_.automaticPromptFile.empty() ||
+            pendingRequest_.valid() ||
+            !std::filesystem::exists(options_.automaticPromptFile))
+        {
+            return;
+        }
+
+        std::error_code error;
+        const auto writeTime = std::filesystem::last_write_time(
+            options_.automaticPromptFile,
+            error);
+        if (error ||
+            (lastAutomaticPromptTime_ &&
+             *lastAutomaticPromptTime_ == writeTime))
+        {
+            return;
+        }
+
+        std::ifstream stream(
+            options_.automaticPromptFile,
+            std::ios::binary);
+        if (!stream)
+        {
+            return;
+        }
+        std::string prompt{
+            std::istreambuf_iterator<char>(stream),
+            std::istreambuf_iterator<char>()
+        };
+        stream.close();
+        lastAutomaticPromptTime_ = writeTime;
+        std::filesystem::remove(options_.automaticPromptFile, error);
+        if (prompt.empty())
+        {
+            return;
+        }
+
+        Logger::Warning(
+            "Starting automatic AI crash recovery investigation.");
+        promptInput_ = std::move(prompt);
+        SubmitPrompt();
     }
 
     void PromptConsole::SubmitPrompt()

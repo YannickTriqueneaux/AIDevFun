@@ -78,6 +78,7 @@ target_link_libraries(EngineImGui PUBLIC raylib)
 add_library(Engine SHARED
     Engine/Source/Application.cpp
     Engine/Source/AssistantApplication.cpp
+    Engine/Source/CrashDiagnostics.cpp
     Engine/Source/DynamicLibrary.cpp
     Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
@@ -100,6 +101,12 @@ target_include_directories(Engine PUBLIC Engine/Include)
 target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json)
 if(WIN32)
     target_link_libraries(Engine PRIVATE winhttp)
+    target_link_libraries(
+        Engine PRIVATE
+        "$<$<NOT:$<CONFIG:Release>>:dbghelp>")
+    target_compile_definitions(
+        Engine PRIVATE
+        "$<$<NOT:$<CONFIG:Release>>:ENGINE_CRASH_DIAGNOSTICS>")
 endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 target_compile_definitions(
@@ -149,6 +156,7 @@ endif()
 add_executable(GameRelease WIN32
     GameHost/Source/ReleaseMain.cpp
     Engine/Source/Application.cpp
+    Engine/Source/CrashDiagnostics.cpp
     Engine/Source/InputSystem.cpp
     Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
@@ -165,6 +173,14 @@ target_include_directories(GameRelease PRIVATE
     ${ACTIVE_GAME_DIR}/Include
 )
 target_link_libraries(GameRelease PRIVATE raylib EngineImGui)
+if(WIN32)
+    target_link_libraries(
+        GameRelease PRIVATE
+        "$<$<NOT:$<CONFIG:Release>>:dbghelp>")
+    target_compile_definitions(
+        GameRelease PRIVATE
+        "$<$<NOT:$<CONFIG:Release>>:ENGINE_CRASH_DIAGNOSTICS>")
+endif()
 target_compile_definitions(GameRelease PRIVATE
     ENGINE_STATIC
     GAME_RELEASE_BUILD

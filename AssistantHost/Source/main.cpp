@@ -1,4 +1,5 @@
 #include "Engine/Application/AssistantApplication.h"
+#include "Engine/Core/CrashDiagnostics.h"
 #include "Engine/Core/Settings.h"
 #include "Engine/Core/Logger.h"
 
@@ -20,6 +21,9 @@ int main(int argc, char** argv)
                 .parent_path();
         Engine::Logger::Initialize(
             executableDirectory / "Logs" / "AssistantHost.log");
+        Engine::CrashDiagnostics::Install(
+            executableDirectory / "Crashes",
+            "AssistantHost");
         Engine::Logger::Info("AssistantHost started.");
         const Engine::LauncherSettings settings = Engine::Settings::Load(
             executableDirectory / "settings.json");

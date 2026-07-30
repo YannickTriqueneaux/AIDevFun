@@ -1,8 +1,10 @@
 #include "Engine/Application/Application.h"
+#include "Engine/Core/CrashDiagnostics.h"
 
 #include "Game/Game.h"
 #include "Game/GameConfig.h"
 
+#include <filesystem>
 #include <string>
 #include <utility>
 
@@ -19,6 +21,11 @@ namespace
 {
     int RunReleasedGame()
     {
+        const std::filesystem::path executableDirectory =
+            std::filesystem::current_path();
+        Engine::CrashDiagnostics::Install(
+            executableDirectory / "Crashes",
+            MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT);
         const Engine::GameApplicationConfig gameConfig =
             GameConfig::CreateApplicationConfig();
         Engine::ApplicationConfig applicationConfig{

@@ -4,6 +4,7 @@
 #include "Engine/UI/PromptMessage.h"
 #include "Engine/UI/PromptProcessor.h"
 
+#include <filesystem>
 #include <string>
 #include <future>
 #include <mutex>
@@ -19,6 +20,7 @@ namespace Engine
         bool collapsible = true;
         bool expandedByDefault = false;
         bool fillWindow = false;
+        std::filesystem::path automaticPromptFile;
     };
 
     class PromptConsole
@@ -34,6 +36,7 @@ namespace Engine
         void SubmitPrompt();
         void PollPendingRequest();
         void PollStreamEvents();
+        void PollAutomaticPrompt();
 
         std::vector<PromptMessage> messages_;
         std::vector<std::string> activityLogs_;
@@ -45,6 +48,8 @@ namespace Engine
         std::vector<OpenAIStreamEvent> pendingStreamEvents_;
         std::optional<std::size_t> activeResponseIndex_;
         std::optional<std::size_t> activeReasoningLogIndex_;
+        std::optional<std::filesystem::file_time_type>
+            lastAutomaticPromptTime_;
         OpenAITokenUsage lastPromptUsage_;
         OpenAITokenUsage sessionUsage_;
         double lastPromptCostUsd_ = 0.0;

@@ -426,6 +426,12 @@ namespace Engine
                     nlohmann::json::object(),
                     nlohmann::json::array()),
                 tool(
+                    "inspect_crash_diagnostics",
+                    "Read the newest non-Release crash reports and process logs. "
+                    "Use this first when GameHost is in crash recovery mode.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
                     "reload_game",
                     "Request loading the latest successfully built Game DLL.",
                     nlohmann::json::object(),
@@ -433,6 +439,12 @@ namespace Engine
                 tool(
                     "get_reload_status",
                     "Read the latest Game DLL reload status.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "launch_game",
+                    "In crash recovery mode, ask Launcher to start the repaired Game. "
+                    "Call only after a successful build.",
                     nlohmann::json::object(),
                     nlohmann::json::array())
             });

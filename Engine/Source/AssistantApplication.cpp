@@ -7,6 +7,7 @@
 
 #include "raylib.h"
 
+#include <filesystem>
 #include <utility>
 
 namespace
@@ -47,7 +48,9 @@ namespace Engine
             {
                 .collapsible = false,
                 .expandedByDefault = true,
-                .fillWindow = true
+                .fillWindow = true,
+                .automaticPromptFile =
+                    std::filesystem::current_path() / "AIRecovery.prompt"
             });
 
         while (!WindowShouldClose())

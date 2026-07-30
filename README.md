@@ -191,6 +191,48 @@ void MyGame::Shutdown()
 The release build compiles these strings into the executable. No shader source
 file needs to be copied beside the final `.exe`.
 
+### Crash recovery and AI-assisted repair
+
+Launcher monitors `GameHost` and distinguishes a normal exit from a crash. It
+does not silently restart a crashed game. Instead, it preserves the available
+diagnostics and displays a **Game crash detected** dialog with two choices:
+
+![Game crash recovery dialog offering AI-assisted repair or an immediate relaunch](docs/images/game-crash-recovery-dialog.png)
+
+*After a crash, the user can ask the AI assistant to investigate and repair the
+game, or relaunch it unchanged.*
+
+- **Yes** starts AI-assisted recovery. The game remains stopped while a
+  recovery-only GameHost keeps the controlled development tools available.
+- **No** relaunches the same game immediately without asking the assistant to
+  modify it.
+
+In a non-Release build, every process installs crash hooks that write a `.txt`
+report and a `.dmp` minidump under the runtime `Crashes/` directory. Text
+reports include the process and thread, exception information, and a
+symbolized call stack with module names, functions, source files, and line
+numbers when matching PDB files are available. Process logs are preserved
+across restarts. These crash hooks and the DbgHelp dependency are disabled in
+Release builds.
+
+When AI-assisted recovery is accepted:
+
+1. Launcher starts `GameHost --recovery` without loading `Game.dll` or opening
+   the game window.
+2. The assistant is brought to the foreground and automatically receives one
+   recovery request.
+3. The assistant reads the newest crash reports and process logs, correlates
+   them with the Game source, and applies the smallest justified repair.
+4. It builds the Debug `Game` target and repairs compilation errors when
+   possible.
+5. Only after a successful build may it call `launch_game`, which returns
+   control to Launcher and starts the repaired game.
+
+The automatic recovery request is consumed once. It is not submitted again
+after the repaired game is running, even if deleting its request file fails.
+If the available evidence does not identify a safe repair, the assistant is
+instructed to explain that instead of guessing.
+
 ### Controlled AI tools
 
 The assistant cannot execute arbitrary shell commands. It communicates with
@@ -202,7 +244,9 @@ small set of controlled tools:
 - apply exact replacements individually or as a validated batch;
 - build only the selected `Game` target;
 - inspect compiler output;
-- request a DLL reload and inspect its status.
+- request a DLL reload and inspect its status;
+- inspect recent crash reports and process logs during recovery;
+- launch a repaired game from recovery mode after a successful build.
 
 Paths are canonicalized and confined to the selected game. Only C++ source
 extensions are editable. The game's `build/` directory is explicitly excluded
