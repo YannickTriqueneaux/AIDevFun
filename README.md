@@ -1,118 +1,229 @@
-# Procedural Raylib Game
+# [**MakeYourOwnGame.AI**](https://github.com/YannickTriqueneaux/MakeYourOwnGame.AI)
 
-A small, code-only C++ project with a strict separation between reusable engine
-code and game-specific code.
+MakeYourOwnGame.AI is a lightweight C++ environment for creating small,
+procedural games with an AI development assistant.
+
+The goal is productivity: launch a game, play it, describe what you want to
+change, and keep playing while the assistant edits and rebuilds the game.
+When the result feels right, the same C++ game can be compiled in Release and
+prepared for distribution.
+
+> **License notice:** This source-available project is intended for creating
+> free mini-games to enjoy, building proofs of concept, experimenting, and
+> sharing games with friends. Game code and content remain private, while
+> infrastructure changes outside `Games/` must be shared with the repository
+> owner. No royalty is due for copies shared entirely free of charge. When a
+> game is used commercially or sold to players, the commercial terms apply,
+> including a fixed royalty of CAD $1.00 per paid copy. Read
+> [LICENSE](LICENSE) and [CONTRIBUTING.md](CONTRIBUTING.md) before using the
+> project.
+
+## The workflow
+
+```text
+Play the game
+      ↓
+Describe a change to the AI
+      ↓
+AI reads and patches the selected Game
+      ↓
+Only Game.dll is recompiled
+      ↓
+GameHost hot-reloads the new DLL
+      ↓
+Keep playing and iterating
+```
+
+The game and assistant run in separate windows:
+
+- `<game-name> - Game`
+- `<game-name> - AI Assistant`
+
+Press `Tab` in either window to focus its partner. The assistant conversation
+survives Game DLL reloads, allowing an ongoing discussion instead of isolated
+one-shot prompts.
+
+## Quick start
+
+Requirements:
+
+- Windows
+- CMake 3.24 or newer
+- a C++20 compiler
+- Git
+- an OpenAI API key
+
+Run:
+
+```bat
+Start.bat
+```
+
+`Start.bat`:
+
+1. checks the OpenAI configuration;
+2. opens [the OpenAI API key page](https://platform.openai.com/api-keys) and
+   securely asks for a key when none is configured;
+3. lists the projects under `Games/`;
+4. asks which game to open;
+5. configures and builds that game in its private build directory; and
+6. starts its Game and AI Assistant windows.
+
+A game can also be selected directly:
+
+```bat
+Start.bat CurrentGame
+```
+
+## Game projects
+
+Every direct child of `Games/` containing `Source/GameModule.cpp` is an
+independent game:
+
+```text
+Games/
+├── BaseGame/
+│   ├── Include/
+│   ├── Source/
+│   └── build/
+└── MyGame/
+    ├── Include/
+    ├── Source/
+    └── build/
+```
+
+`BaseGame` is the clean, versioned starting point. Other game directories are
+local and ignored by Git by default. The assistant edits the selected
+`Games/<game-name>/` directly; there is no temporary source copy.
+
+To rebuild a known project without the interactive menu:
+
+```bat
+dev.bat MyGame
+```
+
+To reset a game from `BaseGame` while preserving a timestamped backup:
+
+```bat
+reset_game.bat MyGame
+```
+
+## How rapid iteration works
+
+### Stable runtime, reloadable game
+
+Reusable systems live in the persistent `Engine` DLL:
+
+- application and window lifecycle;
+- procedural 2D rendering primitives;
+- input;
+- Dear ImGui;
+- serialization interfaces;
+- OpenAI communication;
+- logging and IPC.
+
+Gameplay lives in a much smaller `Game.dll`:
+
+- input bindings and actions;
+- game rules and behaviors;
+- entities and state;
+- what gets rendered;
+- game-specific configuration.
+
+Because the Engine and hosts stay alive, an iteration normally compiles only
+the `Game` CMake target.
+
+### Controlled AI tools
+
+The assistant cannot execute arbitrary shell commands. It communicates with
+the selected GameHost through a game-specific local named pipe and receives a
+small set of controlled tools:
+
+- list, read, and search selected Game source files;
+- read several files in a single batch;
+- apply exact replacements individually or as a validated batch;
+- build only the selected `Game` target;
+- inspect compiler output;
+- request a DLL reload and inspect its status.
+
+Paths are canonicalized and confined to the selected game. Only C++ source
+extensions are editable. The game's `build/` directory is explicitly excluded
+from listing, searching, reading, and patching.
+
+Batch reads and patches reduce AI round trips. The assistant is instructed to
+inspect related files together, prepare a coherent set of changes, compile
+once, repair compiler failures if necessary, and reload only after a successful
+build.
+
+### Incremental compilation and shadow DLLs
+
+CMake and the compiler reuse previous build artifacts, so unchanged translation
+units are not rebuilt.
+
+Windows locks a loaded DLL. GameHost avoids that lock by copying the latest
+successful `Game.dll` to uniquely named generations:
+
+```text
+GameHotReload/
+├── Game_0001.dll
+├── Game_0002.dll
+└── Game_0003.dll
+```
+
+GameHost loads the next generation without restarting the Engine or Assistant.
+The current implementation initializes a fresh game instance during a reload,
+so transient runtime game state may reset.
+
+### Persistent conversation
+
+AssistantHost owns the conversation and OpenAI response context. GameHost owns
+the playable window and reloadable Game DLL. Recompiling or reloading the Game
+therefore does not erase the active AI discussion.
+
+## Multiple games at once
+
+Each game owns:
+
+- `Games/<game-name>/build/`;
+- its executables and `Game.dll`;
+- hot-reload generations;
+- logs;
+- a game-specific IPC pipe;
+- uniquely titled Game and Assistant windows.
+
+Several games can run simultaneously. Starting or rebuilding one game stops
+only processes launched from that game's build directory; other sessions keep
+running.
 
 ## Architecture
 
 ```text
-Engine/
-  Include/Engine/   Stable public engine API
-  Source/           Persistent raylib-backed runtime
-
-Games/
-  BaseGame/         Versioned clean starting game
-  CurrentGame/      Example local game currently being iterated
-
-Launcher/
-  Source/           Process orchestrator
-
-GameHost/
-  Source/           Stable game window process that loads Game.dll
-
-AssistantHost/
-  Source/           Separate ImGui/OpenAI conversation process
+Engine/             Persistent reusable runtime
+GameHost/           Game window and Game.dll hot-reload host
+AssistantHost/      AI conversation window
+Launcher/           Starts the two hosts for one game session
+Games/BaseGame/     Versioned starting game
+Games/<name>/       Independently editable game project
 ```
 
-The persistent `Engine` shared library owns only reusable systems such as the
-application loop, renderer primitives, raw input state, math types, dynamic
-library loading, serialization interfaces, Dear ImGui integration, and the
-engine prompt console. It has no dependency on `Game`.
+The dependency direction is intentionally strict:
 
-The active `Game` shared library maps keys to actions, chooses what to draw, and
-implements gameplay behavior. `Launcher` loads it through a versioned API and
-destroys all game-owned objects before unloading it. This is the foundation for
-loading uniquely named DLL generations during hot reload.
-
-Each directory directly under `Games/` is an independent project. `BaseGame/`
-is committed as the distributable starting point. Other game directories are
-local by default and ignored by Git. Once selected, the build, hot reload, and
-assistant tools all point directly to `Games/<game-name>/`; there is no
-intermediate workspace copy.
-
-Each project owns its build directory at `Games/<game-name>/build/`. These
-directories and `Games/.Backups/` are ignored by Git. The ignore rules
-explicitly keep `Games/BaseGame/` source tracked while still excluding its
-local build products.
-
-## Controls
-
-- Move: arrow keys
-- Action Q: dash
-- Action W: pulse
-- Action E: toggle shield
-- Action R: reset the player
-- Exit: `Escape`
-
-## Build
-
-Requirements:
-
-- CMake 3.24 or newer
-- A C++20 compiler
-- Git
-
-```powershell
-cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
-cmake --build Games/MyGame/build --config Debug
+```text
+Game → Engine
+Engine ✕ Game
 ```
 
-On a multi-config generator, run
-`Games/MyGame/build/Debug/Launcher.exe`. `Game.dll` and `Engine.dll` are emitted
-beside it.
+This boundary keeps the runtime stable while game code changes frequently.
 
-For the normal Windows development loop, run `Start.bat` from the repository
-root. It lists every valid directory under `Games/`, asks which game to use,
-configures CMake for that project, builds Debug, and starts the launcher.
-`dev.bat <game-name>` remains available as a non-interactive rebuild.
+## Configuration
 
-Before listing games, `Start.bat` validates
-`AssistantHost/Config/settings.json`. When no API key is configured, it opens
-the [OpenAI API key page](https://platform.openai.com/api-keys), displays the
-same URL in the terminal, and securely prompts for a key without echoing it.
-The settings file is then created locally with `gpt-5.5` as its default model.
+The local OpenAI configuration is stored in:
 
-## Engine prompt console
+```text
+AssistantHost/Config/settings.json
+```
 
-The launcher starts two independent windows. `GameHost` owns the game window,
-while `AssistantHost` owns the OpenAI conversation and operational logs. Enter
-a prompt in the assistant text box and press `Enter` to submit it.
-
-Press `Tab` in either window to switch focus to the other process.
-The focus target includes the game name, so `Tab` stays within its own session
-when several games are open.
-
-Multiple games can run simultaneously. Each session has:
-
-- its own build and executable directory;
-- its own `Game.dll` hot-reload generations;
-- its own logs;
-- a game-specific IPC pipe;
-- windows titled `<game-name> - Game` and `<game-name> - AI Assistant`.
-
-Starting or rebuilding one game stops only processes launched from that game's
-build directory. Other game sessions remain open.
-
-- Submitted prompts appear on the right.
-- Results and engine information appear on the left.
-- The history automatically scrolls to the latest message.
-- Prompt state belongs to `AssistantHost` and therefore survives game process
-  and future `Game.dll` reloads.
-
-The prompt processor is separate from the panel and calls the OpenAI Responses
-API asynchronously, keeping network latency off the render thread.
-
-Copy or edit `AssistantHost/Config/settings.json` before building:
+Example:
 
 ```json
 {
@@ -123,32 +234,45 @@ Copy or edit `AssistantHost/Config/settings.json` before building:
 }
 ```
 
-`AssistantHost/Config/settings.json` is ignored by Git and copied beside the
-executable only when the `AssistantHost` target is built. Rebuilding `Game.dll`
-does not touch it. Never commit a real API key. The tracked
-`AssistantHost/Config/settings.example.json` documents the expected structure.
+The file is ignored by Git and copied into a game's build only when
+`AssistantHost` is built. Building only `Game.dll` does not touch it. API keys
+and HTTP authorization headers are never written to application logs.
 
-The model is instructed to act as a developer for the hot-reloadable `Game`
-module. It can use a local named-pipe tool service hosted by `GameHost`.
+## Manual builds
 
-Available controlled tools:
+Configure and build one game:
 
-- list and read C++ files under the selected `Games/<game-name>/`, including batch reads;
-- search exact text in Game source;
-- apply one exact-text replacement or a validated batch of ordered replacements;
-- build only the Debug `Game` target;
-- inspect the latest build output;
-- request and inspect a generation-based Game DLL reload.
+```powershell
+cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
+cmake --build Games/MyGame/build --config Debug
+```
 
-Paths are canonicalized and confined to the selected game directory. Only `.cpp`, `.h`, `.hpp`, and
-`.inl` files are writable, file and message sizes are limited, arbitrary shell
-commands are not exposed, and Game builds use a fixed CMake command. The
-project's `build/` subtree is explicitly excluded from listing, searching,
-reading, and patching.
+Run:
+
+```text
+Games/MyGame/build/Debug/Launcher.exe
+```
+
+## Shipping a game
+
+A game can be compiled with optimizations using:
+
+```powershell
+cmake --build Games/MyGame/build --config Release
+```
+
+The runtime is native C++, so the finished game does not require interpreted
+game scripts. Distribution packaging, store integration, metadata, icons,
+installers, and removal or customization of development-only tools remain
+project-specific steps; the repository does not yet provide a one-click
+shipping package.
+
+Commercial distribution is subject to [LICENSE](LICENSE), including the fixed
+CAD $1.00 royalty for each paid copy sold.
 
 ## Logs
 
-Each process creates a fresh log file at startup:
+Every session writes fresh logs under its own build:
 
 ```text
 Games/<game-name>/build/Debug/Logs/Launcher.log
@@ -156,7 +280,38 @@ Games/<game-name>/build/Debug/Logs/GameHost.log
 Games/<game-name>/build/Debug/Logs/AssistantHost.log
 ```
 
-The assistant log records prompts, response IDs, streaming status, tool rounds,
-tool arguments and bounded tool results. The GameHost log records IPC commands,
-controlled builds, and DLL reloads. API keys and HTTP authorization headers are
-never logged.
+Assistant logs contain prompts, response IDs, bounded tool arguments/results,
+and streaming status. GameHost logs contain controlled builds, IPC requests,
+and DLL reload results.
+
+## BaseGame controls
+
+- Move: arrow keys
+- `Q`: dash
+- `W`: pulse
+- `E`: toggle shield
+- `R`: reset
+- `Tab`: switch between Game and Assistant
+- `Escape`: close the focused window
+
+## License
+
+Copyright (c) 2026 Yannick Triqueneaux.
+
+MakeYourOwnGame.AI uses the custom
+**MakeYourOwnGame.AI Source-Available Contribution and Commercial Game License
+1.0**.
+
+In summary:
+
+- infrastructure modifications outside `Games/` must be provided to the
+  Licensor, including private infrastructure modifications;
+- gameplay code and content under `Games/<game-name>/` do not have to be
+  disclosed;
+- game creators retain ownership of their Game Content;
+- commercial use requires quarterly reporting; and
+- every paid copy of a game created with the repository carries a fixed
+  CAD $1.00 royalty.
+
+The full [LICENSE](LICENSE) controls if this summary differs from its terms.
+Third-party dependencies remain governed by their respective licenses.

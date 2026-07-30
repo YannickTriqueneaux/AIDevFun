@@ -1,0 +1,234 @@
+MakeYourOwnGame.AI Source-Available Contribution and Commercial Game License
+Version 1.0 — July 30, 2026
+
+Copyright (c) 2026 Yannick Triqueneaux
+Licensor contact: mmotoobusy@gmail.com
+
+IMPORTANT: THIS IS A SOURCE-AVAILABLE LICENSE, NOT AN OPEN-SOURCE LICENSE.
+
+By exercising any right granted below, You accept this License. If You do not
+accept every term, You may not use, copy, modify, distribute, or create a Game
+Project with the Licensed Work.
+
+1. Definitions
+
+"Licensor" means Yannick Triqueneaux.
+
+"You" means the individual or legal entity exercising rights under this
+License.
+
+"Licensed Work" means the original source code, scripts, templates,
+documentation, and other copyrightable material distributed in this
+repository by the Licensor. It excludes Third-Party Components.
+
+"Core Work" means every part of the Licensed Work located outside the `Games/`
+directory, including Engine, AssistantHost, GameHost, Launcher, build-system
+files, development scripts, infrastructure, and related documentation.
+
+"Core Modification" means any change, adaptation, translation, extension,
+fork, or derivative work of the Core Work.
+
+"Game Content" means source code, build files, scripts, designs, assets, and
+other material located inside a Game Project's `Games/<game-name>/` directory.
+Game Content is not a Core Modification, even when it was copied or adapted
+from `Games/BaseGame/`.
+
+"Game Project" means a game or interactive software project created, generated,
+compiled, linked, or developed using any material part of the Licensed Work,
+including its Engine, Launcher, AssistantHost, GameHost, build scripts,
+BaseGame, or code-generation and assistant workflow.
+
+"Core Modification Source" means the preferred form for modifying a Core
+Modification, including its source code, build files, scripts, and supporting
+material reasonably necessary to build and understand it. Core Modification
+Source expressly excludes all Game Content.
+
+"Commercial Game" means a Game Project for which access to a copy is provided
+to a player in exchange for money or other valuable consideration.
+
+"Sold Copy" means each paid copy, license, activation, key, download
+entitlement, or other paid grant of access to a Commercial Game provided to a
+player. A copy fully refunded or charged back may be excluded or credited in
+the reporting period in which the refund or chargeback occurs. Free copies
+provided for no consideration are not Sold Copies.
+
+"Third-Party Components" means software, content, or other material identified
+as originating from third parties, including raylib, Dear ImGui, rlImGui, and
+nlohmann/json. Those components remain governed exclusively by their respective
+licenses.
+
+2. License Grant
+
+Subject to continuous compliance with this License, the Licensor grants You a
+limited, worldwide, non-exclusive, non-transferable, revocable license to:
+
+a. access, inspect, run, and evaluate the Licensed Work;
+b. make copies and forks;
+c. create Core Modifications and Game Projects;
+d. share Core Modifications and participate in development; and
+e. distribute or sell Game Projects, subject to Sections 3 through 8.
+
+No right is granted to use the Licensor's name, trademarks, or branding except
+for accurate attribution.
+
+3. Mandatory Sharing of Core Modifications
+
+You must provide the Licensor with complete Core Modification Source for every
+Core Modification, including Core Modifications kept private or used only
+internally.
+The first delivery must occur no later than the earliest of:
+
+a. 30 days after the Core Modification is distributed, published, sold, or
+   otherwise made available to another person;
+b. 30 days after the Core Modification is first used commercially; or
+c. 90 days after the Core Modification is first created.
+
+After the first delivery, You must provide updated Core Modification Source at
+least once per calendar quarter while development continues.
+
+Delivery must be made to mmotoobusy@gmail.com or through another
+submission method designated in writing by the Licensor. The delivery must be
+reasonably complete, readable, and sufficient to build and understand the
+Core Modification using ordinarily available development tools.
+
+Sharing with the Licensor does not, by itself, require public disclosure.
+
+For clarity, You are never required to disclose or deliver Game Content,
+including gameplay code, game-specific systems, designs, art, audio, narrative
+content, or other files inside `Games/<game-name>/`.
+
+4. License to Shared Core Modifications and Contributions
+
+For all Core Modification Source, patches, pull requests, suggestions, and
+other copyrightable contributions You provide to the Licensor, You grant the
+Licensor a perpetual, irrevocable, worldwide, royalty-free, fully paid,
+transferable, and sublicensable license to use, reproduce, modify, prepare
+derivative works from, publicly display, publicly perform, distribute,
+commercialize, and relicense them under any terms.
+
+You represent that You have the authority to grant these rights and that Your
+contribution does not knowingly infringe third-party rights. You retain
+ownership of Your contribution except for the rights granted above.
+
+5. Commercial Royalty
+
+For every Sold Copy of a Commercial Game, You owe the Licensor a fixed royalty
+of CAD $1.00.
+
+The royalty:
+
+a. is calculated per Sold Copy, regardless of retail price;
+b. is not reduced by platform commissions, payment-processing fees, taxes,
+   marketing expenses, publisher shares, or other costs;
+c. applies to direct and indirect sales made by You or on Your behalf,
+   including sales through publishers, distributors, stores, and platforms;
+   and
+d. survives expiration or termination of this License for Sold Copies
+   occurring before that expiration or termination.
+
+If a Commercial Game is sold in a bundle, each paid player entitlement to that
+Commercial Game counts as one Sold Copy.
+
+The commercial royalty does not transfer ownership of, or grant the Licensor
+any license to, Your Game Content. You retain all rights in Game Content,
+subject only to this License's terms governing the Licensed Work used by the
+Game Project.
+
+6. Quarterly Reports and Payments
+
+Within 30 days after March 31, June 30, September 30, and December 31 of each
+year, You must send the Licensor:
+
+a. the Commercial Game's title and applicable storefronts or distribution
+   channels;
+b. the number of Sold Copies during the quarter, by channel;
+c. refunds or chargebacks claimed;
+d. cumulative Sold Copies;
+e. the royalty calculation in Canadian dollars; and
+f. payment of all royalties due.
+
+Reports and requests for payment instructions must be sent to
+mmotoobusy@gmail.com. Currency conversion, when necessary, must use the
+Bank of Canada daily exchange rate for the date the underlying sale was
+settled, or another method agreed to in writing by the Licensor.
+
+Late amounts accrue interest at 1% per month or the maximum lawful rate,
+whichever is lower.
+
+7. Records and Verification
+
+You must keep accurate records supporting reports and royalty payments for at
+least five years. No more than once per calendar year, the Licensor may, on 15
+days' written notice, have an independent professional inspect relevant records
+during normal business hours and subject to reasonable confidentiality
+obligations.
+
+The Licensor bears the inspection cost unless an underpayment greater than 5%
+is found for the inspected period. In that case, You must pay the reasonable
+inspection cost in addition to the shortfall and applicable interest.
+
+8. Distribution Requirements
+
+Every copy or fork of the Licensed Work or a Core Modification that You distribute
+must:
+
+a. include this License and all copyright and attribution notices;
+b. state that it is licensed under this source-available License and is not
+   open-source software;
+c. identify material Core Modifications and their dates; and
+d. not represent that the Licensor endorses You or Your Game Project.
+
+Recipients receive rights only under this License. You may not grant rights in
+the Licensed Work that conflict with it.
+
+9. Third-Party Components
+
+This License does not replace, restrict, or extend the licenses of Third-Party
+Components. You are responsible for identifying and complying with all
+applicable third-party licenses and notices.
+
+10. Compliance, Termination, and Reinstatement
+
+Your rights terminate automatically upon any breach. If this is Your first
+breach and You fully cure it within 30 days after receiving written notice from
+the Licensor, Your rights are reinstated provisionally unless the Licensor
+notifies You otherwise for a material or repeated breach.
+
+Failure to share Core Modification Source, submit an accurate report, permit a valid
+inspection, or pay royalties is a material breach. Termination does not cancel
+payment, reporting, recordkeeping, confidentiality, warranty, liability, or
+governing-law obligations that accrued before termination.
+
+11. No Warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSED WORK IS PROVIDED "AS IS"
+AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED, STATUTORY,
+OR OTHERWISE, INCLUDING WARRANTIES OF TITLE, NON-INFRINGEMENT,
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND ERROR-FREE OPERATION.
+
+12. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR WILL NOT BE LIABLE FOR ANY
+INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES,
+OR FOR LOST PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS INTERRUPTION, ARISING
+FROM OR RELATING TO THE LICENSED WORK OR THIS LICENSE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGES.
+
+13. Governing Law and Courts
+
+This License is governed by the laws of the Province of Quebec and the federal
+laws of Canada applicable there, without regard to conflict-of-law rules. The
+parties submit to the exclusive jurisdiction of the courts of Quebec and the
+federal courts of Canada sitting in Quebec.
+
+14. General Terms
+
+This License is the entire agreement concerning the Licensed Work unless the
+Licensor and You sign a separate written agreement. A waiver must be in
+writing. If any provision is unenforceable, it will be adjusted only as much as
+necessary, and the remaining provisions will continue in effect. Headings are
+for convenience only.
+
+Commercial exceptions, alternative royalty arrangements, and proprietary
+licenses are valid only if agreed to in a separate writing signed by the
+Licensor.
