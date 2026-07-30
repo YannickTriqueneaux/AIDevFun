@@ -1,12 +1,10 @@
 #include "Engine/Application/Application.h"
-#include "Engine/Application/GameModule.h"
-#include "Engine/Platform/DynamicLibrary.h"
+#include "GameHost/GameToolService.h"
+#include "GameHost/ReloadableGame.h"
 
 #include <exception>
 #include <filesystem>
 #include <iostream>
-#include <memory>
-#include <stdexcept>
 #include <utility>
 
 int main(int argc, char** argv)
@@ -18,29 +16,14 @@ int main(int argc, char** argv)
                 argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::path{})
                 .parent_path();
 
-        Engine::DynamicLibrary gameModule(executableDirectory / "Game.dll");
-
-        const auto getGameModuleApi =
-            reinterpret_cast<Engine::GetGameModuleApiFunction>(
-                gameModule.GetFunction(Engine::GetGameModuleApiFunctionName));
-        const Engine::GameModuleApi* gameApi = getGameModuleApi();
-
-        if (gameApi == nullptr ||
-            gameApi->apiVersion != Engine::GameModuleApiVersion ||
-            gameApi->getApplicationConfig == nullptr ||
-            gameApi->createGame == nullptr ||
-            gameApi->destroyGame == nullptr)
-        {
-            throw std::runtime_error("The Game module API is incompatible.");
-        }
-
-        using GamePointer = std::unique_ptr<
-            Engine::GameInterface,
-            void (*)(Engine::GameInterface*)>;
-        GamePointer game(gameApi->createGame(), gameApi->destroyGame);
+        const std::filesystem::path workspaceRoot =
+            executableDirectory.parent_path().parent_path();
+        ReloadableGame game(
+            executableDirectory / "Game.dll",
+            executableDirectory / "GameHotReload");
 
         const Engine::GameApplicationConfig gameConfig =
-            gameApi->getApplicationConfig();
+            game.GetApplicationConfig();
         Engine::ApplicationConfig config{
             .windowWidth = gameConfig.windowWidth,
             .windowHeight = gameConfig.windowHeight,
@@ -50,7 +33,11 @@ int main(int argc, char** argv)
         };
 
         Engine::Application application(std::move(config));
-        application.Run(*game);
+        GameToolService tools(
+            game,
+            workspaceRoot,
+            workspaceRoot / "build");
+        application.Run(game);
     }
     catch (const std::exception& exception)
     {
@@ -60,4 +47,3 @@ int main(int argc, char** argv)
 
     return 0;
 }
-

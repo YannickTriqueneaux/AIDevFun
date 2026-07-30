@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <functional>
+#include <vector>
 
 namespace Engine
 {
@@ -26,8 +27,22 @@ namespace Engine
 
     struct OpenAIResponse
     {
+        struct ToolCall
+        {
+            std::string callId;
+            std::string name;
+            std::string arguments;
+        };
+
         std::string id;
         std::string text;
+        std::vector<ToolCall> toolCalls;
+    };
+
+    struct OpenAIToolOutput
+    {
+        std::string callId;
+        std::string output;
     };
 
     class OpenAIClient
@@ -40,6 +55,11 @@ namespace Engine
         [[nodiscard]] OpenAIResponse CreateResponse(
             std::string_view instructions,
             std::string_view prompt,
+            std::string_view previousResponseId,
+            const OpenAIStreamCallback& onEvent) const;
+        [[nodiscard]] OpenAIResponse ContinueWithToolOutputs(
+            std::string_view instructions,
+            const std::vector<OpenAIToolOutput>& outputs,
             std::string_view previousResponseId,
             const OpenAIStreamCallback& onEvent) const;
 

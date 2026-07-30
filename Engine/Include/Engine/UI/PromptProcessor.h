@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/AI/GameToolClient.h"
 #include "Engine/AI/OpenAIClient.h"
 #include "Engine/UI/PromptMessage.h"
 
@@ -21,6 +22,7 @@ namespace Engine
 
     private:
         OpenAIClient client_;
+        GameToolClient gameTools_;
         std::string previousResponseId_;
     };
 }

@@ -203,6 +203,18 @@ namespace
                     delta
                 });
             }
+            else if (type == "response.output_item.done")
+            {
+                const nlohmann::json& item = event.at("item");
+                if (item.value("type", "") == "function_call")
+                {
+                    response.toolCalls.push_back({
+                        .callId = item.value("call_id", ""),
+                        .name = item.value("name", ""),
+                        .arguments = item.value("arguments", "{}")
+                    });
+                }
+            }
             else if (type == "response.completed")
             {
                 if (response.id.empty())
@@ -298,6 +310,129 @@ namespace
 
 namespace Engine
 {
+    namespace
+    {
+        nlohmann::json CreateGameToolDefinitions()
+        {
+            const auto tool = [](
+                const char* name,
+                const char* description,
+                nlohmann::json properties,
+                nlohmann::json required)
+            {
+                return nlohmann::json{
+                    {"type", "function"},
+                    {"name", name},
+                    {"description", description},
+                    {"strict", true},
+                    {"parameters", {
+                        {"type", "object"},
+                        {"properties", std::move(properties)},
+                        {"required", std::move(required)},
+                        {"additionalProperties", false}
+                    }}
+                };
+            };
+
+            return nlohmann::json::array({
+                tool(
+                    "list_game_files",
+                    "List editable C++ source files in the Game module.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "read_game_file",
+                    "Read one C++ source file inside the Game module.",
+                    {{"path", {
+                        {"type", "string"},
+                        {"description", "Path relative to the Game directory."}
+                    }}},
+                    {"path"}),
+                tool(
+                    "search_game_code",
+                    "Search exact text across Game C++ source files.",
+                    {{"query", {{"type", "string"}}}},
+                    {"query"}),
+                tool(
+                    "apply_game_patch",
+                    "Replace one unique exact text block in an existing Game C++ "
+                    "file. Fails when oldText is missing or ambiguous.",
+                    {
+                        {"path", {{"type", "string"}}},
+                        {"oldText", {{"type", "string"}}},
+                        {"newText", {{"type", "string"}}}
+                    },
+                    {"path", "oldText", "newText"}),
+                tool(
+                    "build_game",
+                    "Compile only the Debug Game DLL using the controlled CMake target.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "read_build_output",
+                    "Read output from the latest controlled Game build.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "reload_game",
+                    "Request loading the latest successfully built Game DLL.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "get_reload_status",
+                    "Read the latest Game DLL reload status.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array())
+            });
+        }
+
+        OpenAIResponse SendResponseRequest(
+            const OpenAISettings& settings,
+            std::string_view instructions,
+            nlohmann::json input,
+            std::string_view previousResponseId,
+            const OpenAIStreamCallback& onEvent)
+        {
+            nlohmann::json request{
+                {"model", settings.model},
+                {"instructions", instructions},
+                {"input", std::move(input)},
+                {"reasoning", {
+                    {"effort", "medium"},
+                    {"summary", "auto"}
+                }},
+                {"tools", CreateGameToolDefinitions()},
+                {"tool_choice", "auto"},
+                {"parallel_tool_calls", false},
+                {"store", true},
+                {"stream", true}
+            };
+            if (!previousResponseId.empty())
+            {
+                request["previous_response_id"] = previousResponseId;
+            }
+
+#if defined(_WIN32)
+            OpenAIResponse result;
+            PostResponses(
+                settings.apiKey,
+                request.dump(),
+                onEvent,
+                result);
+#else
+            throw std::runtime_error(
+                "The OpenAI HTTP transport is currently implemented for Windows only.");
+#endif
+
+            if (result.text.empty() && result.toolCalls.empty())
+            {
+                throw std::runtime_error(
+                    "The OpenAI response contained neither text nor tool calls.");
+            }
+            return result;
+        }
+    }
+
     OpenAIClient::OpenAIClient(OpenAISettings settings)
         : settings_(std::move(settings))
     {
@@ -325,39 +460,35 @@ namespace Engine
                 "OpenAI is not configured. Add apiKey and model to settings.json.");
         }
 
-        nlohmann::json request{
-            {"model", settings_.model},
-            {"instructions", instructions},
-            {"input", prompt},
-            {"reasoning", {
-                {"effort", "medium"},
-                {"summary", "auto"}
-            }},
-            {"store", true},
-            {"stream", true}
-        };
-        if (!previousResponseId.empty())
+        return SendResponseRequest(
+            settings_,
+            instructions,
+            std::string(prompt),
+            previousResponseId,
+            onEvent);
+    }
+
+    OpenAIResponse OpenAIClient::ContinueWithToolOutputs(
+        std::string_view instructions,
+        const std::vector<OpenAIToolOutput>& outputs,
+        std::string_view previousResponseId,
+        const OpenAIStreamCallback& onEvent) const
+    {
+        nlohmann::json input = nlohmann::json::array();
+        for (const OpenAIToolOutput& output : outputs)
         {
-            request["previous_response_id"] = previousResponseId;
+            input.push_back({
+                {"type", "function_call_output"},
+                {"call_id", output.callId},
+                {"output", output.output}
+            });
         }
 
-#if defined(_WIN32)
-        OpenAIResponse result;
-        PostResponses(
-            settings_.apiKey,
-            request.dump(),
-            onEvent,
-            result);
-#else
-        throw std::runtime_error(
-            "The OpenAI HTTP transport is currently implemented for Windows only.");
-#endif
-
-        if (result.text.empty())
-        {
-            throw std::runtime_error(
-                "The OpenAI response did not contain output text.");
-        }
-        return result;
+        return SendResponseRequest(
+            settings_,
+            instructions,
+            std::move(input),
+            previousResponseId,
+            onEvent);
     }
 }

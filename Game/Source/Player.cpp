@@ -9,9 +9,43 @@
 
 namespace
 {
-    constexpr float PlayerRadius = 24.0f;
+    constexpr float PlayerHalfSize = 24.0f;
     constexpr float DashDistance = 100.0f;
     constexpr float PulseDuration = 0.35f;
+
+    void DrawSquare(
+        Engine::Renderer2D& renderer,
+        Engine::Vector2 center,
+        float halfSize,
+        Engine::Color color)
+    {
+        const float left = center.x - halfSize;
+        const float right = center.x + halfSize;
+        const float top = center.y - halfSize;
+        const float bottom = center.y + halfSize;
+
+        for (float y = top; y <= bottom; y += 2.0f)
+        {
+            renderer.DrawLine({left, y}, {right, y}, 2.0f, color);
+        }
+    }
+
+    void DrawSquareOutline(
+        Engine::Renderer2D& renderer,
+        Engine::Vector2 center,
+        float halfSize,
+        Engine::Color color)
+    {
+        const float left = center.x - halfSize;
+        const float right = center.x + halfSize;
+        const float top = center.y - halfSize;
+        const float bottom = center.y + halfSize;
+
+        renderer.DrawLine({left, top}, {right, top}, 2.0f, color);
+        renderer.DrawLine({right, top}, {right, bottom}, 2.0f, color);
+        renderer.DrawLine({right, bottom}, {left, bottom}, 2.0f, color);
+        renderer.DrawLine({left, bottom}, {left, top}, 2.0f, color);
+    }
 }
 
 Player::Player()
@@ -38,22 +72,23 @@ void Player::Render(Engine::Renderer2D& renderer) const
     if (pulseTimeRemaining_ > 0.0f)
     {
         const float progress = 1.0f - pulseTimeRemaining_ / PulseDuration;
-        const float radius = PlayerRadius + progress * 90.0f;
+        const float halfSize = PlayerHalfSize + progress * 90.0f;
         const auto alpha =
             static_cast<std::uint8_t>((1.0f - progress) * 220.0f);
-        renderer.DrawCircleOutline(
+        DrawSquareOutline(
+            renderer,
             position_,
-            radius,
+            halfSize,
             {255, 184, 77, alpha});
     }
 
     if (shieldEnabled_)
     {
-        renderer.DrawCircleOutline(position_, PlayerRadius + 10.0f, {102, 191, 255, 255});
-        renderer.DrawCircleOutline(position_, PlayerRadius + 12.0f, {0, 121, 241, 255});
+        DrawSquareOutline(renderer, position_, PlayerHalfSize + 10.0f, {102, 191, 255, 255});
+        DrawSquareOutline(renderer, position_, PlayerHalfSize + 12.0f, {0, 121, 241, 255});
     }
 
-    renderer.DrawCircle(position_, PlayerRadius, {86, 204, 157, 255});
+    DrawSquare(renderer, position_, PlayerHalfSize, {86, 204, 157, 255});
     renderer.DrawLine(
         position_,
         position_ + facing_ * 36.0f,
@@ -115,12 +150,12 @@ void Player::KeepInsidePlayArea()
 {
     position_.x = std::clamp(
         position_.x,
-        PlayerRadius,
-        static_cast<float>(GameConfig::PlayAreaWidth) - PlayerRadius);
+        PlayerHalfSize,
+        static_cast<float>(GameConfig::PlayAreaWidth) - PlayerHalfSize);
     position_.y = std::clamp(
         position_.y,
-        PlayerRadius,
-        static_cast<float>(GameConfig::PlayAreaHeight) - PlayerRadius);
+        PlayerHalfSize,
+        static_cast<float>(GameConfig::PlayAreaHeight) - PlayerHalfSize);
 }
 
 void Player::Reset()

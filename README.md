@@ -97,5 +97,17 @@ does not touch it. Never commit a real API key. The tracked
 `AssistantHost/Config/settings.example.json` documents the expected structure.
 
 The model is instructed to act as a developer for the hot-reloadable `Game`
-module. It currently returns implementation guidance only; local file tools and
-approval-controlled patch application will be added separately.
+module. It can use a local named-pipe tool service hosted by `GameHost`.
+
+Available controlled tools:
+
+- list and read C++ files under `Game/`;
+- search exact text in Game source;
+- apply one unique exact-text replacement atomically;
+- build only the Debug `Game` target;
+- inspect the latest build output;
+- request and inspect a generation-based Game DLL reload.
+
+Paths are canonicalized and confined to `Game/`. Only `.cpp`, `.h`, `.hpp`, and
+`.inl` files are writable, file and message sizes are limited, arbitrary shell
+commands are not exposed, and Game builds use a fixed CMake command.

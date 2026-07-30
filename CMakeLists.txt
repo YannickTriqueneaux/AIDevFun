@@ -63,7 +63,9 @@ add_library(Engine SHARED
     Engine/Source/Application.cpp
     Engine/Source/AssistantApplication.cpp
     Engine/Source/DynamicLibrary.cpp
+    Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/NamedPipe.cpp
     Engine/Source/OpenAIClient.cpp
     Engine/Source/PromptConsole.cpp
     Engine/Source/PromptProcessor.cpp
@@ -91,8 +93,13 @@ target_include_directories(Game PRIVATE Game/Include)
 target_link_libraries(Game PRIVATE Engine)
 target_compile_definitions(Game PRIVATE GAME_MODULE_BUILD)
 
-add_executable(GameHost GameHost/Source/main.cpp)
-target_link_libraries(GameHost PRIVATE Engine)
+add_executable(GameHost
+    GameHost/Source/main.cpp
+    GameHost/Source/GameToolService.cpp
+    GameHost/Source/ReloadableGame.cpp
+)
+target_include_directories(GameHost PRIVATE GameHost/Include)
+target_link_libraries(GameHost PRIVATE Engine nlohmann_json::nlohmann_json)
 
 add_executable(AssistantHost AssistantHost/Source/main.cpp)
 target_link_libraries(AssistantHost PRIVATE Engine)
