@@ -1,5 +1,6 @@
 #include "Engine/Application/AssistantApplication.h"
 
+#include "Engine/AI/OpenAISettings.h"
 #include "Engine/Graphics/RenderContext.h"
 #include "Engine/Platform/WindowFocus.h"
 #include "Engine/UI/PromptConsole.h"
@@ -18,11 +19,19 @@ namespace
 
 namespace Engine
 {
+    struct AssistantApplication::Implementation
+    {
+        OpenAISettings settings;
+        std::string gameWindowTitle;
+    };
+
     AssistantApplication::AssistantApplication(
         OpenAISettings settings,
         std::string gameName)
-        : settings_(std::move(settings)),
-          gameWindowTitle_(gameName + " - Game")
+        : implementation_(new Implementation{
+              std::move(settings),
+              gameName + " - Game"
+          })
     {
         const std::string assistantWindowTitle =
             gameName + " - AI Assistant";
@@ -37,6 +46,7 @@ namespace Engine
     AssistantApplication::~AssistantApplication()
     {
         CloseWindow();
+        delete implementation_;
     }
 
     void AssistantApplication::Run()
@@ -44,7 +54,7 @@ namespace Engine
         RenderContext renderContext;
         UiSystem ui;
         PromptConsole promptConsole(
-            settings_,
+            implementation_->settings,
             {
                 .collapsible = false,
                 .expandedByDefault = true,
@@ -59,7 +69,7 @@ namespace Engine
             {
                 static_cast<void>(
                     WindowFocus::FocusWindowByTitle(
-                        gameWindowTitle_));
+                        implementation_->gameWindowTitle));
             }
 
             renderContext.BeginFrame({12, 14, 20, 255});

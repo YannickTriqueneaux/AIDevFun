@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Engine/AI/OpenAISettings.h"
 #include "Engine/Core/Export.h"
 
 #include <string>
 
 namespace Engine
 {
+    struct OpenAISettings;
+
     class ENGINE_API AssistantApplication
     {
     public:
@@ -21,7 +22,7 @@ namespace Engine
         void Run();
 
     private:
-        OpenAISettings settings_;
-        std::string gameWindowTitle_;
+        struct Implementation;
+        Implementation* implementation_ = nullptr;
     };
 }
