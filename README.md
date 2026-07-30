@@ -70,8 +70,8 @@ Start.bat
 1. checks the OpenAI configuration;
 2. opens [the OpenAI API key page](https://platform.openai.com/api-keys) and
    securely asks for a key when none is configured;
-3. lists the projects under `Games/`;
-4. asks which game to open;
+3. lists the projects under `Games/` and offers to create a new one;
+4. asks which game to open, or asks for a name and copies `BaseGame`;
 5. configures and builds that game in its private build directory; and
 6. starts its Game and AI Assistant windows.
 
@@ -101,6 +101,8 @@ Games/
 `BaseGame` is the clean, versioned starting point. Other game directories are
 local and ignored by Git by default. The assistant edits the selected
 `Games/<game-name>/` directly; there is no temporary source copy.
+
+You can create a new game directly from `Start.bat`.
 
 To rebuild a known project without the interactive menu:
 

@@ -7,9 +7,8 @@ namespace GameConfig
 {
     inline constexpr int PlayAreaWidth = 1280;
     inline constexpr int PlayAreaHeight = 720;
-    inline constexpr int PlayAreaDepth = 720;
     inline constexpr int TargetFramesPerSecond = 144;
-    inline constexpr const char* WindowTitle = "Lightweight 3D Procedural Game";
+    inline constexpr const char* WindowTitle = "Procedural Raylib Game";
 
     inline Engine::GameApplicationConfig CreateApplicationConfig()
     {
@@ -22,7 +21,7 @@ namespace GameConfig
         };
     }
 
-    inline constexpr Engine::Color BackgroundColor{12, 15, 25, 255};
-    inline constexpr Engine::Color GridColor{34, 41, 62, 255};
-    inline constexpr int GridSize = 80;
+    inline constexpr Engine::Color BackgroundColor{15, 18, 28, 255};
+    inline constexpr Engine::Color GridColor{31, 36, 51, 255};
+    inline constexpr int GridSize = 64;
 }

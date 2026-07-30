@@ -3,6 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "PROJECT_ROOT=%~dp0."
 set "GAMES_DIR=%PROJECT_ROOT%\Games"
+set "BASE_GAME_DIR=%GAMES_DIR%\BaseGame"
 set "CONFIGURATION=Debug"
 set "GAME_COUNT=0"
 set "REQUESTED_GAME=%~1"
@@ -52,8 +53,10 @@ if defined REQUESTED_GAME (
     goto :selection_complete
 )
 
+set /a CREATE_GAME_OPTION=GAME_COUNT+1
+echo   !CREATE_GAME_OPTION!. Create a new game
 echo.
-set /p "GAME_SELECTION=Select a game [1-%GAME_COUNT%]: "
+set /p "GAME_SELECTION=Select a game [1-!CREATE_GAME_OPTION!]: "
 
 for /f "delims=0123456789" %%A in ("!GAME_SELECTION!") do (
     echo Invalid selection.
@@ -68,9 +71,15 @@ if !GAME_SELECTION! LSS 1 (
     echo Invalid selection.
     exit /b 1
 )
-if !GAME_SELECTION! GTR !GAME_COUNT! (
+if !GAME_SELECTION! GTR !CREATE_GAME_OPTION! (
     echo Invalid selection.
     exit /b 1
+)
+
+if "!GAME_SELECTION!"=="!CREATE_GAME_OPTION!" (
+    call :create_new_game
+    if errorlevel 1 exit /b 1
+    goto :selection_complete
 )
 
 for %%N in (!GAME_SELECTION!) do set "SELECTED_GAME=!GAME_%%N!"
@@ -113,3 +122,57 @@ exit /b 0
 :failure
 echo Failed to start the development session for %SELECTED_GAME%.
 exit /b 1
+
+:create_new_game
+if not exist "%BASE_GAME_DIR%\Source\GameModule.cpp" (
+    echo Base game template not found: "%BASE_GAME_DIR%"
+    exit /b 1
+)
+
+echo.
+set "NEW_GAME_NAME="
+set /p "NEW_GAME_NAME=Name for the new game: "
+if not defined NEW_GAME_NAME (
+    echo No game name was provided.
+    exit /b 1
+)
+
+echo Validating game name...
+powershell -NoProfile -Command ^
+    "$n=$env:NEW_GAME_NAME; $reserved=@('CON','PRN','AUX','NUL','COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9'); if ([string]::IsNullOrWhiteSpace($n) -or $n.Length -gt 64 -or $n -notmatch '^[A-Za-z0-9]+$' -or $reserved -contains $n.ToUpperInvariant()) { exit 1 }"
+if errorlevel 1 (
+    echo Invalid game name.
+    echo Use 1-64 letters and numbers only.
+    exit /b 1
+)
+
+for /d %%D in ("%GAMES_DIR%\*") do (
+    if /I "%%~nxD"=="!NEW_GAME_NAME!" (
+        echo A game or folder with that name already exists:
+        echo "%%~fD"
+        exit /b 1
+    )
+)
+
+set "NEW_GAME_DIR=%GAMES_DIR%\!NEW_GAME_NAME!"
+if exist "!NEW_GAME_DIR!" (
+    echo A game or folder with that name already exists:
+    echo "!NEW_GAME_DIR!"
+    exit /b 1
+)
+
+echo Creating Games\!NEW_GAME_NAME! from BaseGame...
+robocopy "%BASE_GAME_DIR%" "!NEW_GAME_DIR!" /E /XD build Release /NFL /NDL /NJH /NJS /NP >nul
+if errorlevel 8 (
+    echo Failed to copy BaseGame into Games\!NEW_GAME_NAME!.
+    exit /b 1
+)
+
+if not exist "!NEW_GAME_DIR!\Source\GameModule.cpp" (
+    echo The new game copy is incomplete.
+    exit /b 1
+)
+
+set "SELECTED_GAME=!NEW_GAME_NAME!"
+echo Created game: !SELECTED_GAME!
+exit /b 0
