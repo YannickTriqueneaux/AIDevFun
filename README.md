@@ -66,6 +66,24 @@ Enter a prompt in the text box at the bottom and press `Enter` to submit it.
 - Prompt state belongs to the persistent engine and therefore survives future
   reloads of `Game.dll`.
 
-The current processor returns a local placeholder result. Its interface is kept
-separate from the panel so it can later be connected to an engine command
-system, local model, or remote prompt service.
+The prompt processor is separate from the panel and calls the OpenAI Responses
+API asynchronously, keeping network latency off the render thread.
+
+Copy or edit `Launcher/settings.json` before building:
+
+```json
+{
+  "openai": {
+    "apiKey": "your-api-key",
+    "model": "gpt-5.5"
+  }
+}
+```
+
+`Launcher/settings.json` is ignored by Git and copied beside the executable.
+Never commit a real API key. The tracked `Launcher/settings.example.json`
+documents the expected structure.
+
+The model is instructed to act as a developer for the hot-reloadable `Game`
+module. It currently returns implementation guidance only; local file tools and
+approval-controlled patch application will be added separately.

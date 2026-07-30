@@ -1,7 +1,9 @@
 #include "Engine/Application/Application.h"
 #include "Engine/Application/GameModule.h"
+#include "Engine/Core/Settings.h"
 #include "Engine/Platform/DynamicLibrary.h"
 
+#include <filesystem>
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -12,7 +14,13 @@ int main()
 {
     try
     {
-        Engine::DynamicLibrary gameModule("Game.dll");
+        const std::filesystem::path executableDirectory =
+            std::filesystem::absolute(
+                std::filesystem::path(__argv[0])).parent_path();
+        const Engine::LauncherSettings settings = Engine::Settings::Load(
+            executableDirectory / "settings.json");
+
+        Engine::DynamicLibrary gameModule(executableDirectory / "Game.dll");
 
         const auto getGameModuleApi =
             reinterpret_cast<Engine::GetGameModuleApiFunction>(
@@ -40,7 +48,8 @@ int main()
             .windowHeight = gameConfig.windowHeight,
             .targetFramesPerSecond = gameConfig.targetFramesPerSecond,
             .windowTitle = gameConfig.windowTitle,
-            .verticalSync = gameConfig.verticalSync
+            .verticalSync = gameConfig.verticalSync,
+            .openAI = settings.openAI
         };
 
         Engine::Application application(std::move(config));

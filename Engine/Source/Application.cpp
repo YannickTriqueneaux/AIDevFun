@@ -37,7 +37,7 @@ namespace Engine
         InputSystem input;
         Renderer2D renderer;
         UiSystem ui;
-        PromptConsole promptConsole;
+        PromptConsole promptConsole(config_.openAI);
 
         game.Initialize();
 

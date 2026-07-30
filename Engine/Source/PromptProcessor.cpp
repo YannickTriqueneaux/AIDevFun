@@ -4,20 +4,51 @@
 
 namespace Engine
 {
-    std::vector<PromptMessage> PromptProcessor::Process(
-        std::string_view prompt) const
+    namespace
     {
-        std::vector<PromptMessage> results;
-        results.push_back({
-            PromptMessageRole::Information,
-            "Prompt accepted (" + std::to_string(prompt.size()) + " characters)."
-        });
-        results.push_back({
-            PromptMessageRole::Result,
-            "No prompt provider is connected yet. The engine prompt pipeline "
-            "is ready for a local model, HTTP service, or engine command."
-        });
-        return results;
+        constexpr std::string_view GameDeveloperInstructions =
+            "You are the embedded AI developer for a lightweight C++20 game. "
+            "The reusable Engine is persistent and the Game is a hot-reloadable "
+            "DLL. Focus proposed changes on the Game module. Preserve the strict "
+            "Engine-to-Game dependency direction. Respond in English with concrete, "
+            "implementation-oriented guidance and code when useful. You currently "
+            "cannot access or modify local files, so clearly identify intended files "
+            "and do not claim that changes were applied.";
+    }
+
+    PromptProcessor::PromptProcessor(OpenAISettings settings)
+        : client_(std::move(settings))
+    {
+    }
+
+    bool PromptProcessor::IsConfigured() const
+    {
+        return client_.IsConfigured();
+    }
+
+    const std::string& PromptProcessor::GetModel() const
+    {
+        return client_.GetModel();
+    }
+
+    std::vector<PromptMessage> PromptProcessor::Process(
+        std::string_view prompt)
+    {
+        try
+        {
+            const OpenAIResponse response = client_.CreateResponse(
+                GameDeveloperInstructions,
+                prompt,
+                previousResponseId_);
+            previousResponseId_ = response.id;
+            return {{PromptMessageRole::Result, response.text}};
+        }
+        catch (const std::exception& exception)
+        {
+            return {{
+                PromptMessageRole::Information,
+                std::string("Request failed: ") + exception.what()
+            }};
+        }
     }
 }
-

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <iterator>
+#include <chrono>
+#include <future>
 #include <utility>
 
 namespace
@@ -21,11 +23,14 @@ namespace
 
 namespace Engine
 {
-    PromptConsole::PromptConsole()
+    PromptConsole::PromptConsole(OpenAISettings settings)
+        : processor_(std::move(settings))
     {
         messages_.push_back({
             PromptMessageRole::Information,
-            "Engine prompt console ready. Type a message below and press Enter."
+            processor_.IsConfigured()
+                ? "OpenAI ready with model " + processor_.GetModel() + "."
+                : "OpenAI is not configured. Add apiKey to settings.json."
         });
     }
 
@@ -34,6 +39,8 @@ namespace Engine
         int screenWidth,
         int screenHeight)
     {
+        PollPendingRequest();
+
         const float panelLeft =
             static_cast<float>(screenWidth) - PanelWidth;
         const float toggleLeft = expanded_
@@ -145,6 +152,16 @@ namespace Engine
 
     void PromptConsole::SubmitPrompt()
     {
+        if (pendingRequest_.valid())
+        {
+            messages_.push_back({
+                PromptMessageRole::Information,
+                "Wait for the current response before sending another prompt."
+            });
+            scrollToLatest_ = true;
+            return;
+        }
+
         const auto firstContent = promptInput_.find_first_not_of(" \t\r\n");
         if (firstContent == std::string::npos)
         {
@@ -157,15 +174,44 @@ namespace Engine
             lastContent - firstContent + 1);
 
         messages_.push_back({PromptMessageRole::User, prompt});
+        messages_.push_back({
+            PromptMessageRole::Information,
+            "Thinking..."
+        });
 
-        std::vector<PromptMessage> results = processor_.Process(prompt);
-        messages_.insert(
-            messages_.end(),
-            std::make_move_iterator(results.begin()),
-            std::make_move_iterator(results.end()));
+        pendingRequest_ = std::async(
+            std::launch::async,
+            [this, prompt = std::move(prompt)]()
+            {
+                return processor_.Process(prompt);
+            });
 
         promptInput_.clear();
         scrollToLatest_ = true;
         focusInput_ = true;
+    }
+
+    void PromptConsole::PollPendingRequest()
+    {
+        if (!pendingRequest_.valid() ||
+            pendingRequest_.wait_for(std::chrono::seconds(0)) !=
+                std::future_status::ready)
+        {
+            return;
+        }
+
+        if (!messages_.empty() &&
+            messages_.back().role == PromptMessageRole::Information &&
+            messages_.back().text == "Thinking...")
+        {
+            messages_.pop_back();
+        }
+
+        std::vector<PromptMessage> results = pendingRequest_.get();
+        messages_.insert(
+            messages_.end(),
+            std::make_move_iterator(results.begin()),
+            std::make_move_iterator(results.end()));
+        scrollToLatest_ = true;
     }
 }

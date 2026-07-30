@@ -35,6 +35,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(rlimgui)
 
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.12.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(EngineImGui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -53,16 +61,22 @@ target_link_libraries(EngineImGui PUBLIC raylib)
 
 add_library(Engine SHARED
     Engine/Source/Application.cpp
+    Engine/Source/AssistantApplication.cpp
     Engine/Source/DynamicLibrary.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/OpenAIClient.cpp
     Engine/Source/PromptConsole.cpp
     Engine/Source/PromptProcessor.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/Settings.cpp
     Engine/Source/UiSystem.cpp
 )
 
 target_include_directories(Engine PUBLIC Engine/Include)
-target_link_libraries(Engine PRIVATE raylib EngineImGui)
+target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json)
+if(WIN32)
+    target_link_libraries(Engine PRIVATE winhttp)
+endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 
 add_library(Game SHARED
@@ -76,10 +90,26 @@ target_include_directories(Game PRIVATE Game/Include)
 target_link_libraries(Game PRIVATE Engine)
 target_compile_definitions(Game PRIVATE GAME_MODULE_BUILD)
 
-add_executable(Launcher Launcher/Source/main.cpp)
-target_link_libraries(Launcher PRIVATE Engine)
+add_executable(GameHost GameHost/Source/main.cpp)
+target_link_libraries(GameHost PRIVATE Engine)
 
-foreach(target Engine Game Launcher)
+add_executable(AssistantHost AssistantHost/Source/main.cpp)
+target_link_libraries(AssistantHost PRIVATE Engine)
+
+add_executable(Launcher Launcher/Source/main.cpp)
+if(WIN32)
+    target_link_libraries(Launcher PRIVATE shell32)
+endif()
+
+add_custom_command(
+    TARGET Launcher
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/Launcher/settings.json
+        $<TARGET_FILE_DIR:Launcher>/settings.json
+)
+
+foreach(target Engine Game GameHost AssistantHost Launcher)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
     else()
