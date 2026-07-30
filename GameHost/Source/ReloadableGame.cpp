@@ -1,6 +1,6 @@
 #include "GameHost/ReloadableGame.h"
 
-#include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Graphics/RenderContext.h"
 #include "Engine/Core/Logger.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Platform/DynamicLibrary.h"
@@ -57,6 +57,11 @@ std::string ReloadableGame::GetReloadStatus() const
     return reloadStatus_;
 }
 
+void ReloadableGame::Unload()
+{
+    loaded_.reset();
+}
+
 void ReloadableGame::Initialize()
 {
     loaded_->instance->Initialize();
@@ -75,9 +80,9 @@ Engine::Color ReloadableGame::GetClearColor() const
     return loaded_->instance->GetClearColor();
 }
 
-void ReloadableGame::Render(Engine::Renderer2D& renderer) const
+void ReloadableGame::Render(Engine::RenderContext& context) const
 {
-    loaded_->instance->Render(renderer);
+    loaded_->instance->Render(context);
 }
 
 void ReloadableGame::RenderUi(Engine::UiSystem& ui)
@@ -87,7 +92,10 @@ void ReloadableGame::RenderUi(Engine::UiSystem& ui)
 
 void ReloadableGame::Shutdown()
 {
-    loaded_->instance->Shutdown();
+    if (loaded_)
+    {
+        loaded_->instance->Shutdown();
+    }
 }
 
 std::unique_ptr<ReloadableGame::LoadedGame>

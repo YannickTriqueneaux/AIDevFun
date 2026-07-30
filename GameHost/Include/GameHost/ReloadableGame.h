@@ -28,11 +28,12 @@ public:
     [[nodiscard]] Engine::GameApplicationConfig GetApplicationConfig() const;
     void RequestReload();
     [[nodiscard]] std::string GetReloadStatus() const;
+    void Unload();
 
     void Initialize() override;
     void Update(const Engine::InputSystem& input, float deltaTime) override;
     [[nodiscard]] Engine::Color GetClearColor() const override;
-    void Render(Engine::Renderer2D& renderer) const override;
+    void Render(Engine::RenderContext& context) const override;
     void RenderUi(Engine::UiSystem& ui) override;
     void Shutdown() override;
 
@@ -52,4 +53,3 @@ private:
     mutable std::mutex statusMutex_;
     std::string reloadStatus_ = "Initial Game module loaded.";
 };
-

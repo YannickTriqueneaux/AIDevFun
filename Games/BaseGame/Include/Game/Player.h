@@ -2,13 +2,19 @@
 
 #include "Game/GameInput.h"
 
-#include "Engine/Math/Vector2.h"
 #include "Engine/Serialization/Serializer.h"
 
 namespace Engine
 {
     class Renderer2D;
 }
+
+struct GameVector3
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
 
 class Player final : public Engine::Serializable
 {
@@ -25,7 +31,7 @@ private:
     void KeepInsidePlayArea();
     void Reset();
 
-    Engine::Vector2 position_{};
+    GameVector3 position_{};
     Engine::Vector2 facing_{1.0f, 0.0f};
     float movementSpeed_ = 260.0f;
     float pulseTimeRemaining_ = 0.0f;

@@ -57,12 +57,17 @@ int main(int argc, char** argv)
         };
 
         Engine::Application application(std::move(config));
-        GameToolService tools(
-            game,
-            activeGameRoot,
-            executableDirectory.parent_path());
-        Engine::Logger::Info("Game tools IPC server is ready.");
-        application.Run(game);
+        {
+            GameToolService tools(
+                game,
+                activeGameRoot,
+                executableDirectory.parent_path());
+            Engine::Logger::Info("Game tools IPC server is ready.");
+            application.Run(game);
+        }
+        Engine::Logger::Info("Game tools IPC server stopped.");
+        game.Unload();
+        Engine::Logger::Info("Game DLL unloaded before graphics shutdown.");
         Engine::Logger::Info("GameHost application loop ended.");
     }
     catch (const std::exception& exception)

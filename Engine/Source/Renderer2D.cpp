@@ -19,17 +19,6 @@ namespace
 
 namespace Engine
 {
-    void Renderer2D::BeginFrame(Color clearColor)
-    {
-        BeginDrawing();
-        ClearBackground(ToRaylibColor(clearColor));
-    }
-
-    void Renderer2D::EndFrame()
-    {
-        EndDrawing();
-    }
-
     void Renderer2D::DrawCircle(Vector2 center, float radius, Color color)
     {
         DrawCircleV(ToRaylibVector(center), radius, ToRaylibColor(color));
@@ -83,4 +72,3 @@ namespace Engine
         return GetScreenHeight();
     }
 }
-

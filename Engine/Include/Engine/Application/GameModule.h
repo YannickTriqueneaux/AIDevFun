@@ -6,7 +6,7 @@
 
 namespace Engine
 {
-    inline constexpr std::uint32_t GameModuleApiVersion = 1;
+    inline constexpr std::uint32_t GameModuleApiVersion = 2;
     inline constexpr const char* GetGameModuleApiFunctionName = "GetGameModuleApi";
 
     struct GameApplicationConfig

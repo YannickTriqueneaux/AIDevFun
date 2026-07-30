@@ -1,7 +1,7 @@
 #include "Engine/Application/Application.h"
 
 #include "Engine/Application/GameInterface.h"
-#include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Graphics/RenderContext.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Platform/WindowFocus.h"
 #include "Engine/UI/UiSystem.h"
@@ -35,7 +35,7 @@ namespace Engine
     void Application::Run(GameInterface& game)
     {
         InputSystem input;
-        Renderer2D renderer;
+        RenderContext renderContext;
         UiSystem ui;
 
         game.Initialize();
@@ -52,14 +52,14 @@ namespace Engine
             input.Update();
             game.Update(input, GetFrameTime());
 
-            renderer.BeginFrame(game.GetClearColor());
-            game.Render(renderer);
+            renderContext.BeginFrame(game.GetClearColor());
+            game.Render(renderContext);
 
             ui.BeginFrame();
             game.RenderUi(ui);
             ui.EndFrame();
 
-            renderer.EndFrame();
+            renderContext.EndFrame();
         }
 
         game.Shutdown();

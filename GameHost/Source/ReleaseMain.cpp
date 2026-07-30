@@ -30,8 +30,8 @@ namespace
             .verticalSync = gameConfig.verticalSync
         };
 
-        ProceduralGame game;
         Engine::Application application(std::move(applicationConfig));
+        ProceduralGame game;
         application.Run(game);
         return 0;
     }

@@ -65,6 +65,24 @@ namespace
             WaitForSingleObject(processInfo_.hProcess, INFINITE);
         }
 
+        void RequestWindowClose() const
+        {
+            EnumWindows(
+                [](HWND window, LPARAM parameter) -> BOOL
+                {
+                    const DWORD targetProcessId =
+                        static_cast<DWORD>(parameter);
+                    DWORD windowProcessId = 0;
+                    GetWindowThreadProcessId(window, &windowProcessId);
+                    if (windowProcessId == targetProcessId)
+                    {
+                        PostMessageW(window, WM_CLOSE, 0, 0);
+                    }
+                    return TRUE;
+                },
+                static_cast<LPARAM>(processInfo_.dwProcessId));
+        }
+
     private:
         PROCESS_INFORMATION processInfo_{};
     };
@@ -89,6 +107,7 @@ int main(int argc, char** argv)
 
         gameHost.Wait();
         Engine::Logger::Info("GameHost exited.");
+        assistantHost.RequestWindowClose();
         assistantHost.Wait();
         Engine::Logger::Info("AssistantHost exited.");
 #else

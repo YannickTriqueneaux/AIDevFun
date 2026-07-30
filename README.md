@@ -121,7 +121,7 @@ reset_game.bat MyGame
 Reusable systems live in the persistent `Engine` DLL:
 
 - application and window lifecycle;
-- procedural 2D rendering primitives;
+- procedural 2D and 3D rendering primitives;
 - input;
 - Dear ImGui;
 - serialization interfaces;
@@ -138,6 +138,58 @@ Gameplay lives in a much smaller `Game.dll`:
 
 Because the Engine and hosts stay alive, an iteration normally compiles only
 the `Game` CMake target.
+
+### Choosing 2D or 3D in a game
+
+`GameInterface::Render` receives an `Engine::RenderContext`. A game can use
+`context.Draw2D()`, `context.Draw3D()`, or both in the same frame. For 3D,
+call `Renderer3D::Begin(camera)` before drawing the world and
+`Renderer3D::End()` afterward. Draw 2D overlays after the 3D pass.
+
+### Embedded shaders
+
+Shaders are C++ raw strings in the game source, so the AI assistant can create
+them without adding runtime asset files. Load them after the window exists:
+
+```cpp
+void MyGame::Initialize()
+{
+    static constexpr std::string_view FragmentShader = R"glsl(
+#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+out vec4 finalColor;
+uniform float time;
+
+void main()
+{
+    float pulse = 0.5 + 0.5*sin(time);
+    finalColor = vec4(pulse, 0.3, 1.0 - pulse, 1.0)*fragColor;
+}
+)glsl";
+
+    shader_.LoadFromMemory({}, FragmentShader);
+}
+
+void MyGame::Render(Engine::RenderContext& context) const
+{
+    shader_.SetFloat("time", elapsedTime_);
+    auto& renderer = context.Draw3D();
+    renderer.Begin(camera_);
+    renderer.BeginShader(shader_);
+    renderer.DrawCube({0, 0, 0}, {1, 1, 1}, {255, 255, 255, 255});
+    renderer.EndShader();
+    renderer.End();
+}
+
+void MyGame::Shutdown()
+{
+    shader_.Unload();
+}
+```
+
+The release build compiles these strings into the executable. No shader source
+file needs to be copied beside the final `.exe`.
 
 ### Controlled AI tools
 

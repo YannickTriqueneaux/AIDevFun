@@ -1,6 +1,6 @@
 #include "Engine/Application/AssistantApplication.h"
 
-#include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Graphics/RenderContext.h"
 #include "Engine/Platform/WindowFocus.h"
 #include "Engine/UI/PromptConsole.h"
 #include "Engine/UI/UiSystem.h"
@@ -40,7 +40,7 @@ namespace Engine
 
     void AssistantApplication::Run()
     {
-        Renderer2D renderer;
+        RenderContext renderContext;
         UiSystem ui;
         PromptConsole promptConsole(
             settings_,
@@ -59,16 +59,16 @@ namespace Engine
                         gameWindowTitle_));
             }
 
-            renderer.BeginFrame({12, 14, 20, 255});
+            renderContext.BeginFrame({12, 14, 20, 255});
 
             ui.BeginFrame();
             promptConsole.Render(
                 ui,
-                renderer.GetWidth(),
-                renderer.GetHeight());
+                renderContext.GetWidth(),
+                renderContext.GetHeight());
             ui.EndFrame();
 
-            renderer.EndFrame();
+            renderContext.EndFrame();
         }
     }
 }

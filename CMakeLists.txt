@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY
-        "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 include(FetchContent)
@@ -87,7 +87,10 @@ add_library(Engine SHARED
     Engine/Source/OpenAIPricing.cpp
     Engine/Source/PromptConsole.cpp
     Engine/Source/PromptProcessor.cpp
+    Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/Renderer3D.cpp
+    Engine/Source/ShaderProgram.cpp
     Engine/Source/Settings.cpp
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
@@ -147,7 +150,10 @@ add_executable(GameRelease WIN32
     GameHost/Source/ReleaseMain.cpp
     Engine/Source/Application.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/Renderer3D.cpp
+    Engine/Source/ShaderProgram.cpp
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
     ${ACTIVE_GAME_DIR}/Source/Game.cpp

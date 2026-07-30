@@ -11,9 +11,6 @@ namespace Engine
     class ENGINE_API Renderer2D
     {
     public:
-        void BeginFrame(Color clearColor);
-        void EndFrame();
-
         void DrawCircle(Vector2 center, float radius, Color color);
         void DrawCircleOutline(Vector2 center, float radius, Color color);
         void DrawLine(Vector2 start, Vector2 end, float thickness, Color color);
