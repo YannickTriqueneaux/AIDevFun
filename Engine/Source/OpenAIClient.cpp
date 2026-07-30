@@ -75,7 +75,9 @@ namespace
 
     std::string PostResponses(
         const std::string& apiKey,
-        const std::string& requestBody)
+        const std::string& requestBody,
+        const Engine::OpenAIStreamCallback& onEvent,
+        Engine::OpenAIResponse& response)
     {
         WinHttpHandle session(WinHttpOpen(
             L"ProceduralRaylibEngine/1.0",
@@ -119,7 +121,9 @@ namespace
         }
 
         const std::wstring headers = ToWide(
-            "Content-Type: application/json\r\nAuthorization: Bearer " +
+            "Content-Type: application/json\r\n"
+            "Accept: text/event-stream\r\n"
+            "Authorization: Bearer " +
             apiKey);
         const BOOL sent = WinHttpSendRequest(
             request.Get(),
@@ -145,6 +149,75 @@ namespace
             WINHTTP_NO_HEADER_INDEX);
 
         std::string responseBody;
+        std::string streamBuffer;
+
+        const auto processEvent = [&](std::string_view eventBlock)
+        {
+            constexpr std::string_view DataPrefix = "data:";
+            const std::size_t dataPosition = eventBlock.find(DataPrefix);
+            if (dataPosition == std::string_view::npos)
+            {
+                return;
+            }
+
+            std::string_view data = eventBlock.substr(
+                dataPosition + DataPrefix.size());
+            while (!data.empty() && (data.front() == ' ' || data.front() == '\t'))
+            {
+                data.remove_prefix(1);
+            }
+            while (!data.empty() && (data.back() == '\r' || data.back() == '\n'))
+            {
+                data.remove_suffix(1);
+            }
+            if (data.empty() || data == "[DONE]")
+            {
+                return;
+            }
+
+            const nlohmann::json event = nlohmann::json::parse(data);
+            const std::string type = event.value("type", "");
+
+            if (type == "response.created")
+            {
+                response.id = event.at("response").value("id", "");
+                onEvent({Engine::OpenAIStreamEventType::Status, "Response created."});
+            }
+            else if (type == "response.in_progress")
+            {
+                onEvent({Engine::OpenAIStreamEventType::Status, "Model is working."});
+            }
+            else if (type == "response.reasoning_summary_text.delta")
+            {
+                onEvent({
+                    Engine::OpenAIStreamEventType::ReasoningSummaryDelta,
+                    event.value("delta", "")
+                });
+            }
+            else if (type == "response.output_text.delta")
+            {
+                const std::string delta = event.value("delta", "");
+                response.text += delta;
+                onEvent({
+                    Engine::OpenAIStreamEventType::OutputTextDelta,
+                    delta
+                });
+            }
+            else if (type == "response.completed")
+            {
+                if (response.id.empty())
+                {
+                    response.id = event.at("response").value("id", "");
+                }
+                onEvent({Engine::OpenAIStreamEventType::Status, "Response completed."});
+            }
+            else if (type == "response.failed" || type == "error")
+            {
+                throw std::runtime_error(
+                    "OpenAI stream failed: " + event.dump());
+            }
+        };
+
         while (true)
         {
             DWORD available = 0;
@@ -169,6 +242,30 @@ namespace
                 throw std::runtime_error("Failed while reading the OpenAI response.");
             }
             responseBody.resize(offset + bytesRead);
+
+            streamBuffer.append(
+                responseBody.data() + offset,
+                bytesRead);
+
+            while (true)
+            {
+                std::size_t eventEnd = streamBuffer.find("\r\n\r\n");
+                std::size_t separatorSize = 4;
+                if (eventEnd == std::string::npos)
+                {
+                    eventEnd = streamBuffer.find("\n\n");
+                    separatorSize = 2;
+                }
+                if (eventEnd == std::string::npos)
+                {
+                    break;
+                }
+
+                const std::string eventBlock =
+                    streamBuffer.substr(0, eventEnd);
+                streamBuffer.erase(0, eventEnd + separatorSize);
+                processEvent(eventBlock);
+            }
         }
 
         if (statusCode < 200 || statusCode >= 300)
@@ -187,6 +284,11 @@ namespace
                 }
             }
             throw std::runtime_error(message);
+        }
+
+        if (!streamBuffer.empty())
+        {
+            processEvent(streamBuffer);
         }
 
         return responseBody;
@@ -214,7 +316,8 @@ namespace Engine
     OpenAIResponse OpenAIClient::CreateResponse(
         std::string_view instructions,
         std::string_view prompt,
-        std::string_view previousResponseId) const
+        std::string_view previousResponseId,
+        const OpenAIStreamCallback& onEvent) const
     {
         if (!IsConfigured())
         {
@@ -226,8 +329,12 @@ namespace Engine
             {"model", settings_.model},
             {"instructions", instructions},
             {"input", prompt},
-            {"reasoning", {{"effort", "medium"}}},
-            {"store", true}
+            {"reasoning", {
+                {"effort", "medium"},
+                {"summary", "auto"}
+            }},
+            {"store", true},
+            {"stream", true}
         };
         if (!previousResponseId.empty())
         {
@@ -235,40 +342,16 @@ namespace Engine
         }
 
 #if defined(_WIN32)
-        const std::string responseBody =
-            PostResponses(settings_.apiKey, request.dump());
+        OpenAIResponse result;
+        PostResponses(
+            settings_.apiKey,
+            request.dump(),
+            onEvent,
+            result);
 #else
         throw std::runtime_error(
             "The OpenAI HTTP transport is currently implemented for Windows only.");
 #endif
-
-        const nlohmann::json response = nlohmann::json::parse(responseBody);
-        OpenAIResponse result;
-        result.id = response.value("id", "");
-
-        for (const nlohmann::json& output : response.value(
-                 "output",
-                 nlohmann::json::array()))
-        {
-            if (output.value("type", "") != "message")
-            {
-                continue;
-            }
-
-            for (const nlohmann::json& content : output.value(
-                     "content",
-                     nlohmann::json::array()))
-            {
-                if (content.value("type", "") == "output_text")
-                {
-                    if (!result.text.empty())
-                    {
-                        result.text += '\n';
-                    }
-                    result.text += content.value("text", "");
-                }
-            }
-        }
 
         if (result.text.empty())
         {
@@ -278,4 +361,3 @@ namespace Engine
         return result;
     }
 }
-

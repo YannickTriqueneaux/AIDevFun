@@ -4,9 +4,26 @@
 
 #include <string>
 #include <string_view>
+#include <functional>
 
 namespace Engine
 {
+    enum class OpenAIStreamEventType
+    {
+        Status,
+        ReasoningSummaryDelta,
+        OutputTextDelta
+    };
+
+    struct OpenAIStreamEvent
+    {
+        OpenAIStreamEventType type = OpenAIStreamEventType::Status;
+        std::string text;
+    };
+
+    using OpenAIStreamCallback =
+        std::function<void(const OpenAIStreamEvent&)>;
+
     struct OpenAIResponse
     {
         std::string id;
@@ -23,10 +40,10 @@ namespace Engine
         [[nodiscard]] OpenAIResponse CreateResponse(
             std::string_view instructions,
             std::string_view prompt,
-            std::string_view previousResponseId = {}) const;
+            std::string_view previousResponseId,
+            const OpenAIStreamCallback& onEvent) const;
 
     private:
         OpenAISettings settings_;
     };
 }
-

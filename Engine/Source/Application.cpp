@@ -3,7 +3,6 @@
 #include "Engine/Application/GameInterface.h"
 #include "Engine/Graphics/Renderer2D.h"
 #include "Engine/Input/InputSystem.h"
-#include "Engine/UI/PromptConsole.h"
 #include "Engine/UI/UiSystem.h"
 
 #include "raylib.h"
@@ -37,7 +36,6 @@ namespace Engine
         InputSystem input;
         Renderer2D renderer;
         UiSystem ui;
-        PromptConsole promptConsole(config_.openAI);
 
         game.Initialize();
 
@@ -51,7 +49,6 @@ namespace Engine
 
             ui.BeginFrame();
             game.RenderUi(ui);
-            promptConsole.Render(ui, renderer.GetWidth(), renderer.GetHeight());
             ui.EndFrame();
 
             renderer.EndFrame();

@@ -32,16 +32,18 @@ namespace Engine
     }
 
     std::vector<PromptMessage> PromptProcessor::Process(
-        std::string_view prompt)
+        std::string_view prompt,
+        const OpenAIStreamCallback& onEvent)
     {
         try
         {
             const OpenAIResponse response = client_.CreateResponse(
                 GameDeveloperInstructions,
                 prompt,
-                previousResponseId_);
+                previousResponseId_,
+                onEvent);
             previousResponseId_ = response.id;
-            return {{PromptMessageRole::Result, response.text}};
+            return {};
         }
         catch (const std::exception& exception)
         {

@@ -16,7 +16,8 @@ namespace Engine
         [[nodiscard]] bool IsConfigured() const;
         [[nodiscard]] const std::string& GetModel() const;
         [[nodiscard]] std::vector<PromptMessage> Process(
-            std::string_view prompt);
+            std::string_view prompt,
+            const OpenAIStreamCallback& onEvent);
 
     private:
         OpenAIClient client_;

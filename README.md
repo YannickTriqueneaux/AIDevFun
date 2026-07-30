@@ -15,7 +15,13 @@ Game/
   Source/           Input bindings, rendering, behavior, and DLL exports
 
 Launcher/
-  Source/           Stable executable that loads Game.dll
+  Source/           Process orchestrator
+
+GameHost/
+  Source/           Stable game window process that loads Game.dll
+
+AssistantHost/
+  Source/           Separate ImGui/OpenAI conversation process
 ```
 
 The persistent `Engine` shared library owns only reusable systems such as the
@@ -55,16 +61,15 @@ On a multi-config generator, run `build/Debug/Launcher.exe`. `Game.dll` and
 
 ## Engine prompt console
 
-The engine provides a conversation panel on the right side of the window. It is
-collapsed by default. Use the persistent arrow button on the right edge to
-expand it, then use the button immediately to its left to collapse it again.
-Enter a prompt in the text box at the bottom and press `Enter` to submit it.
+The launcher starts two independent windows. `GameHost` owns the game window,
+while `AssistantHost` owns the OpenAI conversation and operational logs. Enter
+a prompt in the assistant text box and press `Enter` to submit it.
 
 - Submitted prompts appear on the right.
 - Results and engine information appear on the left.
 - The history automatically scrolls to the latest message.
-- Prompt state belongs to the persistent engine and therefore survives future
-  reloads of `Game.dll`.
+- Prompt state belongs to `AssistantHost` and therefore survives game process
+  and future `Game.dll` reloads.
 
 The prompt processor is separate from the panel and calls the OpenAI Responses
 API asynchronously, keeping network latency off the render thread.
