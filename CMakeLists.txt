@@ -19,15 +19,50 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.9-docking
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(imgui)
+
+FetchContent_Declare(
+    rlimgui
+    GIT_REPOSITORY https://github.com/raylib-extras/rlImGui.git
+    GIT_TAG main
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(rlimgui)
+
+add_library(EngineImGui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+    ${rlimgui_SOURCE_DIR}/rlImGui.cpp
+)
+target_include_directories(EngineImGui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/misc/cpp
+    ${rlimgui_SOURCE_DIR}
+)
+target_link_libraries(EngineImGui PUBLIC raylib)
+
 add_library(Engine SHARED
     Engine/Source/Application.cpp
     Engine/Source/DynamicLibrary.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/PromptConsole.cpp
+    Engine/Source/PromptProcessor.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/UiSystem.cpp
 )
 
 target_include_directories(Engine PUBLIC Engine/Include)
-target_link_libraries(Engine PRIVATE raylib)
+target_link_libraries(Engine PRIVATE raylib EngineImGui)
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 
 add_library(Game SHARED

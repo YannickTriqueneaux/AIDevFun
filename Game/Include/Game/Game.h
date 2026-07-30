@@ -9,10 +9,10 @@ class ProceduralGame final : public Engine::GameInterface
 {
 public:
     void Update(const Engine::InputSystem& input, float deltaTime) override;
+    [[nodiscard]] Engine::Color GetClearColor() const override;
     void Render(Engine::Renderer2D& renderer) const override;
 
 private:
     GameInput inputBindings_;
     Player player_;
 };
-

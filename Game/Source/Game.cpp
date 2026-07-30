@@ -12,10 +12,13 @@ void ProceduralGame::Update(
     player_.Update(inputBindings_.BuildPlayerCommand(input), deltaTime);
 }
 
+Engine::Color ProceduralGame::GetClearColor() const
+{
+    return GameConfig::BackgroundColor;
+}
+
 void ProceduralGame::Render(Engine::Renderer2D& renderer) const
 {
-    renderer.BeginFrame(GameConfig::BackgroundColor);
-
     for (int x = 0; x < renderer.GetWidth(); x += GameConfig::GridSize)
     {
         renderer.DrawLine(
@@ -38,6 +41,4 @@ void ProceduralGame::Render(Engine::Renderer2D& renderer) const
     player_.RenderHud(renderer);
     renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
 
-    renderer.EndFrame();
 }
-

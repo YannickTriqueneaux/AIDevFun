@@ -1,9 +1,12 @@
 #pragma once
 
+#include "Engine/Graphics/Color.h"
+
 namespace Engine
 {
     class InputSystem;
     class Renderer2D;
+    class UiSystem;
 
     class GameInterface
     {
@@ -12,8 +15,9 @@ namespace Engine
 
         virtual void Initialize() {}
         virtual void Update(const InputSystem& input, float deltaTime) = 0;
+        [[nodiscard]] virtual Color GetClearColor() const = 0;
         virtual void Render(Renderer2D& renderer) const = 0;
+        virtual void RenderUi(UiSystem&) {}
         virtual void Shutdown() {}
     };
 }
-
