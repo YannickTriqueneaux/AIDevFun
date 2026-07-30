@@ -2,6 +2,8 @@
 
 #include "Engine/UI/UiSystem.h"
 
+#include "Engine/Core/Logger.h"
+
 #include <algorithm>
 #include <iterator>
 #include <chrono>
@@ -205,6 +207,9 @@ namespace Engine
             firstContent,
             lastContent - firstContent + 1);
 
+        Logger::Info(
+            "User prompt submitted:\n" +
+            prompt.substr(0, std::min<std::size_t>(prompt.size(), 4'000)));
         messages_.push_back({PromptMessageRole::User, prompt});
         activityLogs_.push_back("Request queued.");
         activeResponseIndex_.reset();
@@ -243,6 +248,7 @@ namespace Engine
             std::make_move_iterator(results.begin()),
             std::make_move_iterator(results.end()));
         scrollToLatest_ = true;
+        Logger::Info("Pending OpenAI request joined by the UI thread.");
     }
 
     void PromptConsole::PollStreamEvents()
@@ -259,6 +265,7 @@ namespace Engine
             {
             case OpenAIStreamEventType::Status:
                 activityLogs_.push_back(event.text);
+                Logger::Info("OpenAI status: " + event.text);
                 break;
 
             case OpenAIStreamEventType::ReasoningSummaryDelta:

@@ -349,6 +349,17 @@ namespace Engine
                     }}},
                     {"path"}),
                 tool(
+                    "read_game_files",
+                    "Read several independent Game C++ source files in one call. "
+                    "Prefer this over repeated read_game_file calls.",
+                    {{"paths", {
+                        {"type", "array"},
+                        {"items", {{"type", "string"}}},
+                        {"minItems", 1},
+                        {"maxItems", 16}
+                    }}},
+                    {"paths"}),
+                tool(
                     "search_game_code",
                     "Search exact text across Game C++ source files.",
                     {{"query", {{"type", "string"}}}},
@@ -363,6 +374,27 @@ namespace Engine
                         {"newText", {{"type", "string"}}}
                     },
                     {"path", "oldText", "newText"}),
+                tool(
+                    "apply_game_patches",
+                    "Apply up to 32 ordered unique exact-text replacements across "
+                    "active Game files in one call. The entire batch is validated "
+                    "before files are written. Prefer this over repeated single patches.",
+                    {{"patches", {
+                        {"type", "array"},
+                        {"minItems", 1},
+                        {"maxItems", 32},
+                        {"items", {
+                            {"type", "object"},
+                            {"properties", {
+                                {"path", {{"type", "string"}}},
+                                {"oldText", {{"type", "string"}}},
+                                {"newText", {{"type", "string"}}}
+                            }},
+                            {"required", {"path", "oldText", "newText"}},
+                            {"additionalProperties", false}
+                        }}
+                    }}},
+                    {"patches"}),
                 tool(
                     "build_game",
                     "Compile only the Debug Game DLL using the controlled CMake target.",
@@ -391,7 +423,8 @@ namespace Engine
             std::string_view instructions,
             nlohmann::json input,
             std::string_view previousResponseId,
-            const OpenAIStreamCallback& onEvent)
+            const OpenAIStreamCallback& onEvent,
+            bool allowTools)
         {
             nlohmann::json request{
                 {"model", settings.model},
@@ -401,12 +434,15 @@ namespace Engine
                     {"effort", "medium"},
                     {"summary", "auto"}
                 }},
-                {"tools", CreateGameToolDefinitions()},
-                {"tool_choice", "auto"},
-                {"parallel_tool_calls", false},
                 {"store", true},
                 {"stream", true}
             };
+            if (allowTools)
+            {
+                request["tools"] = CreateGameToolDefinitions();
+                request["tool_choice"] = "auto";
+                request["parallel_tool_calls"] = true;
+            }
             if (!previousResponseId.empty())
             {
                 request["previous_response_id"] = previousResponseId;
@@ -465,14 +501,16 @@ namespace Engine
             instructions,
             std::string(prompt),
             previousResponseId,
-            onEvent);
+            onEvent,
+            true);
     }
 
     OpenAIResponse OpenAIClient::ContinueWithToolOutputs(
         std::string_view instructions,
         const std::vector<OpenAIToolOutput>& outputs,
         std::string_view previousResponseId,
-        const OpenAIStreamCallback& onEvent) const
+        const OpenAIStreamCallback& onEvent,
+        bool allowTools) const
     {
         nlohmann::json input = nlohmann::json::array();
         for (const OpenAIToolOutput& output : outputs)
@@ -489,6 +527,7 @@ namespace Engine
             instructions,
             std::move(input),
             previousResponseId,
-            onEvent);
+            onEvent,
+            allowTools);
     }
 }

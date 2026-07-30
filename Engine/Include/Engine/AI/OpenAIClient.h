@@ -61,7 +61,8 @@ namespace Engine
             std::string_view instructions,
             const std::vector<OpenAIToolOutput>& outputs,
             std::string_view previousResponseId,
-            const OpenAIStreamCallback& onEvent) const;
+            const OpenAIStreamCallback& onEvent,
+            bool allowTools = true) const;
 
     private:
         OpenAISettings settings_;

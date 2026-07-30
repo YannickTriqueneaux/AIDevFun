@@ -1,4 +1,5 @@
 #include "Engine/Application/Application.h"
+#include "Engine/Core/Logger.h"
 #include "GameHost/GameToolService.h"
 #include "GameHost/ReloadableGame.h"
 
@@ -15,6 +16,9 @@ int main(int argc, char** argv)
             std::filesystem::absolute(
                 argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::path{})
                 .parent_path();
+        Engine::Logger::Initialize(
+            executableDirectory / "Logs" / "GameHost.log");
+        Engine::Logger::Info("GameHost started.");
 
         const std::filesystem::path workspaceRoot =
             executableDirectory.parent_path().parent_path();
@@ -37,10 +41,13 @@ int main(int argc, char** argv)
             game,
             workspaceRoot,
             workspaceRoot / "build");
+        Engine::Logger::Info("Game tools IPC server is ready.");
         application.Run(game);
+        Engine::Logger::Info("GameHost application loop ended.");
     }
     catch (const std::exception& exception)
     {
+        Engine::Logger::Error(exception.what());
         std::cerr << "GameHost fatal error: " << exception.what() << '\n';
         return 1;
     }

@@ -43,6 +43,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+set(GAME_TEMPLATE_DIR "${CMAKE_SOURCE_DIR}/GameTemplate")
+set(ACTIVE_GAME_DIR "${CMAKE_SOURCE_DIR}/Workspace/Game")
+
+if(NOT EXISTS "${ACTIVE_GAME_DIR}/Source/GameModule.cpp")
+    message(STATUS "Initializing active Game workspace from GameTemplate")
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/Workspace")
+    file(COPY "${GAME_TEMPLATE_DIR}/" DESTINATION "${ACTIVE_GAME_DIR}")
+endif()
+
 add_library(EngineImGui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -65,6 +74,7 @@ add_library(Engine SHARED
     Engine/Source/DynamicLibrary.cpp
     Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/Logger.cpp
     Engine/Source/NamedPipe.cpp
     Engine/Source/OpenAIClient.cpp
     Engine/Source/PromptConsole.cpp
@@ -83,13 +93,13 @@ endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 
 add_library(Game SHARED
-    Game/Source/GameModule.cpp
-    Game/Source/Game.cpp
-    Game/Source/GameInput.cpp
-    Game/Source/Player.cpp
+    ${ACTIVE_GAME_DIR}/Source/GameModule.cpp
+    ${ACTIVE_GAME_DIR}/Source/Game.cpp
+    ${ACTIVE_GAME_DIR}/Source/GameInput.cpp
+    ${ACTIVE_GAME_DIR}/Source/Player.cpp
 )
 
-target_include_directories(Game PRIVATE Game/Include)
+target_include_directories(Game PRIVATE ${ACTIVE_GAME_DIR}/Include)
 target_link_libraries(Game PRIVATE Engine)
 target_compile_definitions(Game PRIVATE GAME_MODULE_BUILD)
 
@@ -112,6 +122,7 @@ add_custom_command(
 )
 
 add_executable(Launcher Launcher/Source/main.cpp)
+target_link_libraries(Launcher PRIVATE Engine)
 if(WIN32)
     target_link_libraries(Launcher PRIVATE shell32)
 endif()

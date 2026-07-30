@@ -2,9 +2,12 @@
 
 #include "GameHost/ReloadableGame.h"
 
+#include "Engine/Core/Logger.h"
+
 #include <array>
 #include <cstdio>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -20,6 +23,9 @@ namespace
 {
     constexpr std::size_t MaximumFileSize = 512 * 1024;
     constexpr std::size_t MaximumSearchResults = 100;
+    constexpr std::size_t MaximumBatchFiles = 16;
+    constexpr std::size_t MaximumBatchPatches = 32;
+    constexpr std::size_t MaximumBatchReadSize = 3 * 1024 * 1024;
 
     bool IsAllowedSourceExtension(const std::filesystem::path& path)
     {
@@ -64,6 +70,71 @@ namespace
         }
         return true;
     }
+
+    void ApplyExactReplacement(
+        std::string& content,
+        std::string_view oldText,
+        std::string_view newText)
+    {
+        if (oldText.empty())
+        {
+            throw std::runtime_error("oldText cannot be empty.");
+        }
+
+        const std::size_t position = content.find(oldText);
+        if (position == std::string::npos)
+        {
+            throw std::runtime_error("oldText was not found.");
+        }
+        if (content.find(oldText, position + oldText.size()) !=
+            std::string::npos)
+        {
+            throw std::runtime_error(
+                "oldText is ambiguous; provide a larger unique block.");
+        }
+
+        content.replace(position, oldText.size(), newText);
+        if (content.size() > MaximumFileSize)
+        {
+            throw std::runtime_error(
+                "Patched file would exceed the 512 KiB limit.");
+        }
+    }
+
+    void WriteTextFileAtomically(
+        const std::filesystem::path& file,
+        std::string_view content)
+    {
+        const std::filesystem::path temporary =
+            file.string() + ".assistant.tmp";
+        {
+            std::ofstream stream(
+                temporary,
+                std::ios::binary | std::ios::trunc);
+            if (!stream)
+            {
+                throw std::runtime_error(
+                    "Unable to create temporary Game file.");
+            }
+            stream.write(
+                content.data(),
+                static_cast<std::streamsize>(content.size()));
+        }
+
+#if defined(_WIN32)
+        if (!MoveFileExW(
+                temporary.c_str(),
+                file.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            std::filesystem::remove(temporary);
+            throw std::runtime_error(
+                "Atomic replacement of the Game file failed.");
+        }
+#else
+        std::filesystem::rename(temporary, file);
+#endif
+    }
 }
 
 GameToolService::GameToolService(
@@ -72,7 +143,8 @@ GameToolService::GameToolService(
     std::filesystem::path buildDirectory)
     : game_(game),
       workspaceRoot_(std::filesystem::weakly_canonical(workspaceRoot)),
-      gameRoot_(std::filesystem::weakly_canonical(workspaceRoot_ / "Game")),
+      gameRoot_(std::filesystem::weakly_canonical(
+          workspaceRoot_ / "Workspace" / "Game")),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       server_(
           std::string(Engine::GameToolsPipeName),
@@ -93,6 +165,7 @@ std::string GameToolService::HandleRequest(std::string_view request)
             input.value("arguments", nlohmann::json::object());
 
         nlohmann::json result;
+        Engine::Logger::Info("IPC tool request: " + command);
 
         if (command == "ping")
         {
@@ -110,6 +183,37 @@ std::string GameToolService::HandleRequest(std::string_view request)
                 {"path", std::filesystem::relative(file, gameRoot_).generic_string()},
                 {"content", ReadTextFile(file)}
             };
+        }
+        else if (command == "read_game_files")
+        {
+            const auto& paths = arguments.at("paths");
+            if (!paths.is_array() || paths.empty() ||
+                paths.size() > MaximumBatchFiles)
+            {
+                throw std::runtime_error(
+                    "paths must contain between 1 and 16 files.");
+            }
+
+            nlohmann::json files = nlohmann::json::array();
+            std::size_t totalSize = 0;
+            for (const auto& path : paths)
+            {
+                const std::filesystem::path file = ResolveGameFile(
+                    path.get<std::string>());
+                std::string content = ReadTextFile(file);
+                totalSize += content.size();
+                if (totalSize > MaximumBatchReadSize)
+                {
+                    throw std::runtime_error(
+                        "Combined batch read exceeds the 3 MiB limit.");
+                }
+                files.push_back({
+                    {"path", std::filesystem::relative(
+                        file, gameRoot_).generic_string()},
+                    {"content", std::move(content)}
+                });
+            }
+            result = {{"files", std::move(files)}};
         }
         else if (command == "list_game_files")
         {
@@ -185,63 +289,64 @@ std::string GameToolService::HandleRequest(std::string_view request)
             const std::string newText =
                 arguments.at("newText").get<std::string>();
 
-            if (oldText.empty())
-            {
-                throw std::runtime_error("oldText cannot be empty.");
-            }
-
             std::string content = ReadTextFile(file);
-            const std::size_t position = content.find(oldText);
-            if (position == std::string::npos)
-            {
-                throw std::runtime_error("oldText was not found.");
-            }
-            if (content.find(oldText, position + oldText.size()) !=
-                std::string::npos)
-            {
-                throw std::runtime_error(
-                    "oldText is ambiguous; provide a larger unique block.");
-            }
-
-            content.replace(position, oldText.size(), newText);
-            if (content.size() > MaximumFileSize)
-            {
-                throw std::runtime_error(
-                    "Patched file would exceed the 512 KiB limit.");
-            }
-
-            const std::filesystem::path temporary =
-                file.string() + ".assistant.tmp";
-            {
-                std::ofstream stream(
-                    temporary,
-                    std::ios::binary | std::ios::trunc);
-                if (!stream)
-                {
-                    throw std::runtime_error(
-                        "Unable to create temporary Game file.");
-                }
-                stream.write(
-                    content.data(),
-                    static_cast<std::streamsize>(content.size()));
-            }
-
-#if defined(_WIN32)
-            if (!MoveFileExW(
-                    temporary.c_str(),
-                    file.c_str(),
-                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            {
-                std::filesystem::remove(temporary);
-                throw std::runtime_error(
-                    "Atomic replacement of the Game file failed.");
-            }
-#else
-            std::filesystem::rename(temporary, file);
-#endif
+            ApplyExactReplacement(content, oldText, newText);
+            WriteTextFileAtomically(file, content);
             result = {
                 {"path", std::filesystem::relative(file, gameRoot_).generic_string()},
                 {"changed", true}
+            };
+        }
+        else if (command == "apply_game_patches")
+        {
+            const auto& patches = arguments.at("patches");
+            if (!patches.is_array() || patches.empty() ||
+                patches.size() > MaximumBatchPatches)
+            {
+                throw std::runtime_error(
+                    "patches must contain between 1 and 32 replacements.");
+            }
+
+            std::map<std::filesystem::path, std::string> changedFiles;
+            for (std::size_t index = 0; index < patches.size(); ++index)
+            {
+                const auto& patch = patches.at(index);
+                const std::filesystem::path file = ResolveGameFile(
+                    patch.at("path").get<std::string>());
+                auto [entry, inserted] = changedFiles.try_emplace(file);
+                if (inserted)
+                {
+                    entry->second = ReadTextFile(file);
+                }
+
+                try
+                {
+                    ApplyExactReplacement(
+                        entry->second,
+                        patch.at("oldText").get<std::string>(),
+                        patch.at("newText").get<std::string>());
+                }
+                catch (const std::exception& exception)
+                {
+                    throw std::runtime_error(
+                        "Patch " + std::to_string(index + 1) + " for " +
+                        std::filesystem::relative(
+                            file, gameRoot_).generic_string() +
+                        " failed: " + exception.what());
+                }
+            }
+
+            nlohmann::json files = nlohmann::json::array();
+            for (const auto& [file, content] : changedFiles)
+            {
+                WriteTextFileAtomically(file, content);
+                files.push_back(std::filesystem::relative(
+                    file, gameRoot_).generic_string());
+            }
+            result = {
+                {"changed", true},
+                {"patchCount", patches.size()},
+                {"files", std::move(files)}
             };
         }
         else if (command == "build_game")
@@ -274,6 +379,8 @@ std::string GameToolService::HandleRequest(std::string_view request)
     }
     catch (const std::exception& exception)
     {
+        Engine::Logger::Warning(
+            std::string("IPC tool request failed: ") + exception.what());
         return nlohmann::json({
             {"ok", false},
             {"error", exception.what()}
@@ -304,7 +411,7 @@ std::filesystem::path GameToolService::ResolveGameFile(
         !IsAllowedSourceExtension(resolved))
     {
         throw std::runtime_error(
-            "Only C++ source files inside Game are allowed.");
+            "Only C++ source files inside the active Game workspace are allowed.");
     }
     if (!std::filesystem::is_regular_file(resolved))
     {
@@ -316,6 +423,7 @@ std::filesystem::path GameToolService::ResolveGameFile(
 std::string GameToolService::BuildGame()
 {
     std::scoped_lock lock(buildMutex_);
+    Engine::Logger::Info("Controlled Game build started.");
 
     const std::string command =
         "cmake --build \"" + buildDirectory_.string() +
@@ -341,6 +449,9 @@ std::string GameToolService::BuildGame()
 
     const int exitCode = _pclose(pipe);
     lastBuildOutput_ = output;
+    Engine::Logger::Info(
+        "Controlled Game build completed with exit code " +
+        std::to_string(exitCode) + ".");
     return nlohmann::json({
         {"success", exitCode == 0},
         {"exitCode", exitCode},

@@ -10,9 +10,13 @@ Engine/
   Include/Engine/   Stable public engine API
   Source/           Persistent raylib-backed runtime
 
-Game/
+GameTemplate/
   Include/Game/     Reloadable game types and configuration
-  Source/           Input bindings, rendering, behavior, and DLL exports
+  Source/           Versioned clean starting point for a new game
+
+Workspace/Game/
+  Include/Game/     Active, local game headers
+  Source/           Active input, rendering, behavior, and DLL exports
 
 Launcher/
   Source/           Process orchestrator
@@ -29,10 +33,16 @@ application loop, renderer primitives, raw input state, math types, dynamic
 library loading, serialization interfaces, Dear ImGui integration, and the
 engine prompt console. It has no dependency on `Game`.
 
-The `Game` shared library maps keys to actions, chooses what to draw, and
+The active `Game` shared library maps keys to actions, chooses what to draw, and
 implements gameplay behavior. `Launcher` loads it through a versioned API and
 destroys all game-owned objects before unloading it. This is the foundation for
 loading uniquely named DLL generations during hot reload.
+
+`GameTemplate/` is committed and remains the distributable starting game.
+`Workspace/Game/` is ignored by Git and contains the game currently being
+iterated. On the first CMake configure, the active workspace is copied from the
+template. Existing workspace files are never overwritten automatically. To
+start over, remove `Workspace/Game/` manually and configure again.
 
 ## Controls
 
@@ -101,13 +111,28 @@ module. It can use a local named-pipe tool service hosted by `GameHost`.
 
 Available controlled tools:
 
-- list and read C++ files under `Game/`;
+- list and read C++ files under `Workspace/Game/`, including batch reads;
 - search exact text in Game source;
-- apply one unique exact-text replacement atomically;
+- apply one exact-text replacement or a validated batch of ordered replacements;
 - build only the Debug `Game` target;
 - inspect the latest build output;
 - request and inspect a generation-based Game DLL reload.
 
-Paths are canonicalized and confined to `Game/`. Only `.cpp`, `.h`, `.hpp`, and
+Paths are canonicalized and confined to `Workspace/Game/`. Only `.cpp`, `.h`, `.hpp`, and
 `.inl` files are writable, file and message sizes are limited, arbitrary shell
 commands are not exposed, and Game builds use a fixed CMake command.
+
+## Logs
+
+Each process creates a fresh log file at startup:
+
+```text
+build/Debug/Logs/Launcher.log
+build/Debug/Logs/GameHost.log
+build/Debug/Logs/AssistantHost.log
+```
+
+The assistant log records prompts, response IDs, streaming status, tool rounds,
+tool arguments and bounded tool results. The GameHost log records IPC commands,
+controlled builds, and DLL reloads. API keys and HTTP authorization headers are
+never logged.

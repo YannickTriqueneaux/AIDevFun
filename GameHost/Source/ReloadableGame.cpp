@@ -1,6 +1,7 @@
 #include "GameHost/ReloadableGame.h"
 
 #include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Core/Logger.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Platform/DynamicLibrary.h"
 #include "Engine/UI/UiSystem.h"
@@ -33,6 +34,7 @@ ReloadableGame::ReloadableGame(
 {
     loaded_ = LoadNextGeneration();
     applicationConfig_ = loaded_->api->getApplicationConfig();
+    Engine::Logger::Info("Initial Game DLL generation loaded.");
 }
 
 ReloadableGame::~ReloadableGame() = default;
@@ -46,6 +48,7 @@ void ReloadableGame::RequestReload()
 {
     reloadRequested_ = true;
     SetReloadStatus("Reload requested.");
+    Engine::Logger::Info("Game DLL reload requested through IPC.");
 }
 
 std::string ReloadableGame::GetReloadStatus() const
@@ -157,11 +160,16 @@ void ReloadableGame::ProcessReloadRequest()
         loaded_ = std::move(next);
         SetReloadStatus(
             "Reloaded Game generation " + std::to_string(generation_) + ".");
+        Engine::Logger::Info(
+            "Reloaded Game DLL generation " +
+            std::to_string(generation_) + ".");
     }
     catch (const std::exception& exception)
     {
         SetReloadStatus(
             std::string("Reload failed: ") + exception.what());
+        Engine::Logger::Error(
+            std::string("Game DLL reload failed: ") + exception.what());
     }
 }
 
@@ -170,4 +178,3 @@ void ReloadableGame::SetReloadStatus(std::string status)
     std::scoped_lock lock(statusMutex_);
     reloadStatus_ = std::move(status);
 }
-

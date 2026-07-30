@@ -1,3 +1,5 @@
+#include "Engine/Core/Logger.h"
+
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -37,6 +39,10 @@ namespace
                 throw std::runtime_error(
                     "Failed to start " + executable.filename().string());
             }
+
+            Engine::Logger::Info(
+                "Started process " + executable.filename().string() +
+                " (PID " + std::to_string(processInfo_.dwProcessId) + ").");
         }
 
         ~Process()
@@ -73,13 +79,18 @@ int main(int argc, char** argv)
             std::filesystem::absolute(
                 argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::path{})
                 .parent_path();
+        Engine::Logger::Initialize(
+            executableDirectory / "Logs" / "Launcher.log");
+        Engine::Logger::Info("Launcher started.");
 
 #if defined(_WIN32)
         Process gameHost(executableDirectory / "GameHost.exe");
         Process assistantHost(executableDirectory / "AssistantHost.exe");
 
         gameHost.Wait();
+        Engine::Logger::Info("GameHost exited.");
         assistantHost.Wait();
+        Engine::Logger::Info("AssistantHost exited.");
 #else
         throw std::runtime_error(
             "Multi-process launcher is currently implemented for Windows only.");
@@ -87,10 +98,10 @@ int main(int argc, char** argv)
     }
     catch (const std::exception& exception)
     {
+        Engine::Logger::Error(exception.what());
         std::cerr << "Launcher fatal error: " << exception.what() << '\n';
         return 1;
     }
 
     return 0;
 }
-
