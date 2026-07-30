@@ -1,8 +1,5 @@
 /build/
 /Workspace/
-/Games/*
-!/Games/BaseGame/
-!/Games/BaseGame/**
 /Games/*/build/
 /Games/*/Release/
 /Games/.Backups/

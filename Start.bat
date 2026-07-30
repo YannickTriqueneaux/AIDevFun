@@ -139,7 +139,7 @@ if not defined NEW_GAME_NAME (
 
 echo Validating game name...
 powershell -NoProfile -Command ^
-    "$n=$env:NEW_GAME_NAME; $reserved=@('CON','PRN','AUX','NUL','COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9'); if ([string]::IsNullOrWhiteSpace($n) -or $n.Length -gt 64 -or $n -notmatch '^[A-Za-z0-9]+$' -or $reserved -contains $n.ToUpperInvariant()) { exit 1 }"
+    "$n=$env:NEW_GAME_NAME; $reserved=@('CON','PRN','AUX','NUL','COM1','COM2','COM3','COM4','COM5','COM6','COM7','COM8','COM9','LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9'); $plain=$n -match '^[A-Za-z0-9]+$'; $hidden=$n -match '^__[A-Za-z0-9]+$'; $deviceName=$n.TrimStart('_').ToUpperInvariant(); if ([string]::IsNullOrWhiteSpace($n) -or $n.Length -gt 64 -or (-not $plain -and -not $hidden) -or $reserved -contains $deviceName) { exit 1 }"
 if errorlevel 1 (
     echo Invalid game name.
     echo Use 1-64 letters and numbers only.
@@ -171,6 +171,22 @@ if errorlevel 8 (
 if not exist "!NEW_GAME_DIR!\Source\GameModule.cpp" (
     echo The new game copy is incomplete.
     exit /b 1
+)
+
+if "!NEW_GAME_NAME:~0,2!"=="__" (
+    set "LOCAL_GIT_EXCLUDE=%PROJECT_ROOT%\.git\info\exclude"
+    if exist "%PROJECT_ROOT%\.git\info" (
+        powershell -NoProfile -Command ^
+            "$file=$env:LOCAL_GIT_EXCLUDE; $line='/Games/'+$env:NEW_GAME_NAME+'/'; $exists=Test-Path -LiteralPath $file; if (-not $exists -or -not (Get-Content -LiteralPath $file | Where-Object { $_ -ieq $line })) { Add-Content -LiteralPath $file -Value $line }"
+        if errorlevel 1 (
+            echo Warning: the game was created, but its local Git exclusion failed.
+        ) else (
+            echo Added Games\!NEW_GAME_NAME! to the local Git exclude file.
+        )
+    ) else (
+        echo Warning: no local .git\info directory was found.
+        echo The game was created but could not be hidden from Git.
+    )
 )
 
 set "SELECTED_GAME=!NEW_GAME_NAME!"

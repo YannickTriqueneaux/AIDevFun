@@ -98,11 +98,35 @@ Games/
     └── build/
 ```
 
-`BaseGame` is the clean, versioned starting point. Other game directories are
-local and ignored by Git by default. The assistant edits the selected
+`BaseGame` is the clean, versioned starting point. Other game directories can
+also be versioned normally. The assistant edits the selected
 `Games/<game-name>/` directly; there is no temporary source copy.
 
-You can create a new game directly from `Start.bat`.
+### Starting a new game
+
+It is strongly recommended to fork this repository before starting a game.
+Clone your fork and keep the game under version control so that every change
+made manually or by the AI assistant can be reviewed, reverted, and preserved.
+
+To create and start a game:
+
+1. run `Start.bat`;
+2. select **Create a new game**;
+3. enter the new game's name;
+4. wait while `BaseGame` is copied, configured, and built; and
+5. use the Game and AI Assistant windows to begin iterating.
+
+The new project is created under `Games/<game-name>/`. Commit that directory to
+your fork:
+
+```bat
+git add Games/MyGame
+git commit -m "Start MyGame"
+git push
+```
+
+Build outputs under the game directory remain ignored, so commits contain the
+game source and content rather than generated files.
 
 To rebuild a known project without the interactive menu:
 
