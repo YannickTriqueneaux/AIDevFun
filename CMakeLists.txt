@@ -19,20 +19,35 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-add_executable(ProceduralRaylibStarter
-    src/main.cpp
-    src/Application.cpp
-    src/Game.cpp
-    src/Input.cpp
-    src/Player.cpp
+add_library(Engine SHARED
+    Engine/Source/Application.cpp
+    Engine/Source/DynamicLibrary.cpp
+    Engine/Source/InputSystem.cpp
+    Engine/Source/Renderer2D.cpp
 )
 
-target_include_directories(ProceduralRaylibStarter PRIVATE src)
-target_link_libraries(ProceduralRaylibStarter PRIVATE raylib)
+target_include_directories(Engine PUBLIC Engine/Include)
+target_link_libraries(Engine PRIVATE raylib)
+target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 
-if(MSVC)
-    target_compile_options(ProceduralRaylibStarter PRIVATE /W4 /permissive-)
-else()
-    target_compile_options(ProceduralRaylibStarter PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+add_library(Game SHARED
+    Game/Source/GameModule.cpp
+    Game/Source/Game.cpp
+    Game/Source/GameInput.cpp
+    Game/Source/Player.cpp
+)
 
+target_include_directories(Game PRIVATE Game/Include)
+target_link_libraries(Game PRIVATE Engine)
+target_compile_definitions(Game PRIVATE GAME_MODULE_BUILD)
+
+add_executable(Launcher Launcher/Source/main.cpp)
+target_link_libraries(Launcher PRIVATE Engine)
+
+foreach(target Engine Game Launcher)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endforeach()

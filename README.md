@@ -1,8 +1,31 @@
-# Procedural Raylib Starter
+# Procedural Raylib Game
 
-A small, code-only C++ game foundation built with raylib. It uses procedural
-shapes and keeps window management, input mapping, game flow, and player logic
-separate.
+A small, code-only C++ project with a strict separation between reusable engine
+code and game-specific code.
+
+## Architecture
+
+```text
+Engine/
+  Include/Engine/   Stable public engine API
+  Source/           Persistent raylib-backed runtime
+
+Game/
+  Include/Game/     Reloadable game types and configuration
+  Source/           Input bindings, rendering, behavior, and DLL exports
+
+Launcher/
+  Source/           Stable executable that loads Game.dll
+```
+
+The persistent `Engine` shared library owns only reusable systems such as the
+application loop, renderer primitives, raw input state, math types, dynamic
+library loading, and serialization interfaces. It has no dependency on `Game`.
+
+The `Game` shared library maps keys to actions, chooses what to draw, and
+implements gameplay behavior. `Launcher` loads it through a versioned API and
+destroys all game-owned objects before unloading it. This is the foundation for
+loading uniquely named DLL generations during hot reload.
 
 ## Controls
 
@@ -26,4 +49,5 @@ cmake -S . -B build
 cmake --build build --config Debug
 ```
 
-On a multi-config generator, the executable is placed under `build/Debug`.
+On a multi-config generator, run `build/Debug/Launcher.exe`. `Game.dll` and
+`Engine.dll` are emitted beside it.
