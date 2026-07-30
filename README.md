@@ -59,11 +59,17 @@ cmake --build build --config Debug
 On a multi-config generator, run `build/Debug/Launcher.exe`. `Game.dll` and
 `Engine.dll` are emitted beside it.
 
+For the normal Windows development loop, run `dev.bat` from the repository
+root. It stops all project processes, configures CMake, builds Debug, and starts
+the launcher only after a successful build.
+
 ## Engine prompt console
 
 The launcher starts two independent windows. `GameHost` owns the game window,
 while `AssistantHost` owns the OpenAI conversation and operational logs. Enter
 a prompt in the assistant text box and press `Enter` to submit it.
+
+Press `Tab` in either window to switch focus to the other process.
 
 - Submitted prompts appear on the right.
 - Results and engine information appear on the left.
@@ -74,7 +80,7 @@ a prompt in the assistant text box and press `Enter` to submit it.
 The prompt processor is separate from the panel and calls the OpenAI Responses
 API asynchronously, keeping network latency off the render thread.
 
-Copy or edit `Launcher/settings.json` before building:
+Copy or edit `AssistantHost/Config/settings.json` before building:
 
 ```json
 {
@@ -85,9 +91,10 @@ Copy or edit `Launcher/settings.json` before building:
 }
 ```
 
-`Launcher/settings.json` is ignored by Git and copied beside the executable.
-Never commit a real API key. The tracked `Launcher/settings.example.json`
-documents the expected structure.
+`AssistantHost/Config/settings.json` is ignored by Git and copied beside the
+executable only when the `AssistantHost` target is built. Rebuilding `Game.dll`
+does not touch it. Never commit a real API key. The tracked
+`AssistantHost/Config/settings.example.json` documents the expected structure.
 
 The model is instructed to act as a developer for the hot-reloadable `Game`
 module. It currently returns implementation guidance only; local file tools and

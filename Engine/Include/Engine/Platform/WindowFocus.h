@@ -1,0 +1,16 @@
+#pragma once
+
+#include "Engine/Core/Export.h"
+
+#include <string_view>
+
+namespace Engine
+{
+    class ENGINE_API WindowFocus
+    {
+    public:
+        [[nodiscard]] static bool FocusProcessWindow(
+            std::string_view processExecutableName);
+    };
+}
+

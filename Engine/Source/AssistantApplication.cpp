@@ -1,6 +1,7 @@
 #include "Engine/Application/AssistantApplication.h"
 
 #include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Platform/WindowFocus.h"
 #include "Engine/UI/PromptConsole.h"
 #include "Engine/UI/UiSystem.h"
 
@@ -46,6 +47,12 @@ namespace Engine
 
         while (!WindowShouldClose())
         {
+            if (IsKeyPressed(KEY_TAB))
+            {
+                static_cast<void>(
+                    WindowFocus::FocusProcessWindow("GameHost.exe"));
+            }
+
             renderer.BeginFrame({12, 14, 20, 255});
 
             ui.BeginFrame();
@@ -59,4 +66,3 @@ namespace Engine
         }
     }
 }
-

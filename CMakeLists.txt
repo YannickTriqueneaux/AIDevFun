@@ -70,6 +70,7 @@ add_library(Engine SHARED
     Engine/Source/Renderer2D.cpp
     Engine/Source/Settings.cpp
     Engine/Source/UiSystem.cpp
+    Engine/Source/WindowFocus.cpp
 )
 
 target_include_directories(Engine PUBLIC Engine/Include)
@@ -95,19 +96,18 @@ target_link_libraries(GameHost PRIVATE Engine)
 
 add_executable(AssistantHost AssistantHost/Source/main.cpp)
 target_link_libraries(AssistantHost PRIVATE Engine)
+add_custom_command(
+    TARGET AssistantHost
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/AssistantHost/Config/settings.json
+        $<TARGET_FILE_DIR:AssistantHost>/settings.json
+)
 
 add_executable(Launcher Launcher/Source/main.cpp)
 if(WIN32)
     target_link_libraries(Launcher PRIVATE shell32)
 endif()
-
-add_custom_command(
-    TARGET Launcher
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_SOURCE_DIR}/Launcher/settings.json
-        $<TARGET_FILE_DIR:Launcher>/settings.json
-)
 
 foreach(target Engine Game GameHost AssistantHost Launcher)
     if(MSVC)

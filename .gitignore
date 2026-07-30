@@ -3,4 +3,4 @@
 /cmake-build-*/
 *.user
 *.suo
-/Launcher/settings.json
+/AssistantHost/Config/settings.json

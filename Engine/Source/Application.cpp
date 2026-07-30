@@ -3,6 +3,7 @@
 #include "Engine/Application/GameInterface.h"
 #include "Engine/Graphics/Renderer2D.h"
 #include "Engine/Input/InputSystem.h"
+#include "Engine/Platform/WindowFocus.h"
 #include "Engine/UI/UiSystem.h"
 
 #include "raylib.h"
@@ -41,6 +42,12 @@ namespace Engine
 
         while (!WindowShouldClose())
         {
+            if (IsKeyPressed(KEY_TAB))
+            {
+                static_cast<void>(
+                    WindowFocus::FocusProcessWindow("AssistantHost.exe"));
+            }
+
             input.Update();
             game.Update(input, GetFrameTime());
 
