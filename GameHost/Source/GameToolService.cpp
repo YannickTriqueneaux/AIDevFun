@@ -149,6 +149,8 @@ GameToolService::GameToolService(
     bool recoveryMode)
     : game_(game),
       gameRoot_(std::filesystem::weakly_canonical(gameRoot)),
+      engineRoot_(std::filesystem::weakly_canonical(
+          gameRoot_.parent_path().parent_path() / "Engine")),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
       recoveryMode_(recoveryMode),
@@ -229,6 +231,51 @@ std::string GameToolService::HandleRequest(std::string_view request)
             }
             result = {{"files", std::move(files)}};
         }
+        else if (command == "read_engine_file")
+        {
+            const std::filesystem::path file = ResolveEngineFile(
+                arguments.at("path").get<std::string>());
+            result = {
+                {"path", std::filesystem::relative(
+                    file, engineRoot_).generic_string()},
+                {"content", ReadTextFile(file)},
+                {"readOnly", true}
+            };
+        }
+        else if (command == "read_engine_files")
+        {
+            const auto& paths = arguments.at("paths");
+            if (!paths.is_array() || paths.empty() ||
+                paths.size() > MaximumBatchFiles)
+            {
+                throw std::runtime_error(
+                    "paths must contain between 1 and 16 files.");
+            }
+
+            nlohmann::json files = nlohmann::json::array();
+            std::size_t totalSize = 0;
+            for (const auto& path : paths)
+            {
+                const std::filesystem::path file = ResolveEngineFile(
+                    path.get<std::string>());
+                std::string content = ReadTextFile(file);
+                totalSize += content.size();
+                if (totalSize > MaximumBatchReadSize)
+                {
+                    throw std::runtime_error(
+                        "Combined batch read exceeds the 3 MiB limit.");
+                }
+                files.push_back({
+                    {"path", std::filesystem::relative(
+                        file, engineRoot_).generic_string()},
+                    {"content", std::move(content)}
+                });
+            }
+            result = {
+                {"files", std::move(files)},
+                {"readOnly", true}
+            };
+        }
         else if (command == "list_game_files")
         {
             nlohmann::json files = nlohmann::json::array();
@@ -255,6 +302,26 @@ std::string GameToolService::HandleRequest(std::string_view request)
                 }
             }
             result = {{"files", std::move(files)}};
+        }
+        else if (command == "list_engine_files")
+        {
+            nlohmann::json files = nlohmann::json::array();
+            for (const auto& entry :
+                 std::filesystem::recursive_directory_iterator(engineRoot_))
+            {
+                if (entry.is_regular_file() &&
+                    IsAllowedSourceExtension(entry.path()))
+                {
+                    files.push_back(
+                        std::filesystem::relative(
+                            entry.path(),
+                            engineRoot_).generic_string());
+                }
+            }
+            result = {
+                {"files", std::move(files)},
+                {"readOnly", true}
+            };
         }
         else if (command == "search_game_code")
         {
@@ -313,6 +380,57 @@ std::string GameToolService::HandleRequest(std::string_view request)
                 }
             }
             result = {{"matches", std::move(matches)}};
+        }
+        else if (command == "search_engine_code")
+        {
+            const std::string query =
+                arguments.at("query").get<std::string>();
+            if (query.empty() || query.size() > 256)
+            {
+                throw std::runtime_error(
+                    "Search query must contain 1 to 256 characters.");
+            }
+
+            nlohmann::json matches = nlohmann::json::array();
+            for (const auto& entry :
+                 std::filesystem::recursive_directory_iterator(engineRoot_))
+            {
+                if (!entry.is_regular_file() ||
+                    !IsAllowedSourceExtension(entry.path()))
+                {
+                    continue;
+                }
+
+                std::ifstream stream(entry.path());
+                std::string line;
+                std::size_t lineNumber = 0;
+                while (std::getline(stream, line))
+                {
+                    ++lineNumber;
+                    if (line.find(query) != std::string::npos)
+                    {
+                        matches.push_back({
+                            {"path", std::filesystem::relative(
+                                entry.path(),
+                                engineRoot_).generic_string()},
+                            {"line", lineNumber},
+                            {"text", line}
+                        });
+                        if (matches.size() >= MaximumSearchResults)
+                        {
+                            break;
+                        }
+                    }
+                }
+                if (matches.size() >= MaximumSearchResults)
+                {
+                    break;
+                }
+            }
+            result = {
+                {"matches", std::move(matches)},
+                {"readOnly", true}
+            };
         }
         else if (command == "apply_game_patch")
         {
@@ -555,6 +673,39 @@ std::filesystem::path GameToolService::ResolveGameFile(
     if (!std::filesystem::is_regular_file(resolved))
     {
         throw std::runtime_error("Game file does not exist.");
+    }
+    return resolved;
+}
+
+std::filesystem::path GameToolService::ResolveEngineFile(
+    std::string_view relativePath) const
+{
+    const std::filesystem::path relative =
+        std::filesystem::path(relativePath).lexically_normal();
+    if (relative.empty() || relative.is_absolute())
+    {
+        throw std::runtime_error("Engine path must be relative.");
+    }
+    for (const auto& component : relative)
+    {
+        if (component == ".." || component == "build")
+        {
+            throw std::runtime_error(
+                "Engine path traversal and build access are not allowed.");
+        }
+    }
+
+    const std::filesystem::path resolved =
+        std::filesystem::weakly_canonical(engineRoot_ / relative);
+    if (!IsPathInside(resolved, engineRoot_) ||
+        !IsAllowedSourceExtension(resolved))
+    {
+        throw std::runtime_error(
+            "Only Engine C++ source files may be read.");
+    }
+    if (!std::filesystem::is_regular_file(resolved))
+    {
+        throw std::runtime_error("Engine file does not exist.");
     }
     return resolved;
 }

@@ -380,6 +380,35 @@ namespace Engine
                     }}},
                     {"paths"}),
                 tool(
+                    "list_engine_files",
+                    "List C++ source files in the read-only Engine tree.",
+                    nlohmann::json::object(),
+                    nlohmann::json::array()),
+                tool(
+                    "read_engine_file",
+                    "Read one C++ source file from Engine. Engine is read-only.",
+                    {{"path", {
+                        {"type", "string"},
+                        {"description", "Path relative to the Engine directory."}
+                    }}},
+                    {"path"}),
+                tool(
+                    "read_engine_files",
+                    "Read up to 16 Engine C++ source files in one call. "
+                    "Engine is read-only.",
+                    {{"paths", {
+                        {"type", "array"},
+                        {"items", {{"type", "string"}}},
+                        {"minItems", 1},
+                        {"maxItems", 16}
+                    }}},
+                    {"paths"}),
+                tool(
+                    "search_engine_code",
+                    "Search exact text across the read-only Engine C++ source tree.",
+                    {{"query", {{"type", "string"}}}},
+                    {"query"}),
+                tool(
                     "search_game_code",
                     "Search exact text across Game C++ source files.",
                     {{"query", {{"type", "string"}}}},

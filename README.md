@@ -146,6 +146,12 @@ the `Game` CMake target.
 call `Renderer3D::Begin(camera)` before drawing the world and
 `Renderer3D::End()` afterward. Draw 2D overlays after the 3D pass.
 
+![A game converted to real 3D with perspective, lighting, and an embedded shader by the AI assistant](docs/images/ai-assisted-3d-game-conversion.png)
+
+*The assistant can convert an existing game to real 3D, add a perspective
+camera and an embedded lighting shader, build the updated `Game.dll`, and
+hot-reload it while preserving the rapid iteration workflow.*
+
 ### Embedded shaders
 
 Shaders are C++ raw strings in the game source, so the AI assistant can create
@@ -240,6 +246,7 @@ the selected GameHost through a game-specific local named pipe and receives a
 small set of controlled tools:
 
 - list, read, and search selected Game source files;
+- list, read, and search Engine C++ source files in read-only mode;
 - read several files in a single batch;
 - apply exact replacements individually or as a validated batch;
 - build only the selected `Game` target;
@@ -248,9 +255,10 @@ small set of controlled tools:
 - inspect recent crash reports and process logs during recovery;
 - launch a repaired game from recovery mode after a successful build.
 
-Paths are canonicalized and confined to the selected game. Only C++ source
-extensions are editable. The game's `build/` directory is explicitly excluded
-from listing, searching, reading, and patching.
+Paths are canonicalized and confined to either the selected Game or the Engine
+tree. Only C++ source extensions inside the selected Game are editable. Engine
+access has separate list, read, batch-read, and search tools with no patch
+operation. Build directories and path traversal are explicitly excluded.
 
 Batch reads and patches reduce AI round trips. The assistant is instructed to
 inspect related files together, prepare a coherent set of changes, compile

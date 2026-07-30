@@ -25,11 +25,14 @@ private:
     [[nodiscard]] std::string HandleRequest(std::string_view request);
     [[nodiscard]] std::filesystem::path ResolveGameFile(
         std::string_view relativePath) const;
+    [[nodiscard]] std::filesystem::path ResolveEngineFile(
+        std::string_view relativePath) const;
     [[nodiscard]] std::string BuildGame();
     [[nodiscard]] std::string ReadCrashDiagnostics() const;
 
     ReloadableGame* game_ = nullptr;
     std::filesystem::path gameRoot_;
+    std::filesystem::path engineRoot_;
     std::filesystem::path buildDirectory_;
     std::filesystem::path runtimeDirectory_;
     bool recoveryMode_ = false;
