@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('start', 'ping', 'build', 'reload', 'reload-wait', 'build-reload', 'logs', 'verify')]
+    [ValidateSet('start', 'ping', 'state', 'build', 'reload', 'reload-wait', 'build-reload', 'logs', 'verify')]
     [string]$Command,
     [string]$Game,
     [string]$BuildDirectory,
@@ -110,6 +110,7 @@ switch ($Command) {
         [pscustomobject]@{ status = 'started'; pid = $started.Id; path = $launcher } | ConvertTo-Json -Compress
     }
     'ping' { Write-Response (Invoke-ToolCommand $gameName 'ping') }
+    'state' { Write-Response (Invoke-ToolCommand $gameName 'get_game_state') }
     'build' { Write-Response (Invoke-ToolCommand $gameName 'build_game') }
     'reload' { Write-Response (Invoke-ToolCommand $gameName 'reload_game') }
     'reload-wait' {

@@ -44,3 +44,10 @@ void ProceduralGame::Render(Engine::RenderContext& context) const
     renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
 #endif
 }
+
+#if defined(ENGINE_AUTOTESTS)
+void ProceduralGame::SerializeAutoTestState(Engine::Serializer& serializer)
+{
+    player_.Serialize(serializer);
+}
+#endif

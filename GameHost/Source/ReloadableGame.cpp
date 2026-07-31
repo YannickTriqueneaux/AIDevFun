@@ -64,39 +64,61 @@ void ReloadableGame::Unload()
 
 void ReloadableGame::Initialize()
 {
+    std::scoped_lock lock(gameMutex_);
     loaded_->instance->Initialize();
+    initialized_ = true;
 }
 
 void ReloadableGame::Update(
     const Engine::InputSystem& input,
     float deltaTime)
 {
+    std::scoped_lock lock(gameMutex_);
     ProcessReloadRequest();
     loaded_->instance->Update(input, deltaTime);
 }
 
 Engine::Color ReloadableGame::GetClearColor() const
 {
+    std::scoped_lock lock(gameMutex_);
     return loaded_->instance->GetClearColor();
 }
 
 void ReloadableGame::Render(Engine::RenderContext& context) const
 {
+    std::scoped_lock lock(gameMutex_);
     loaded_->instance->Render(context);
 }
 
 void ReloadableGame::RenderUi(Engine::UiSystem& ui)
 {
+    std::scoped_lock lock(gameMutex_);
     loaded_->instance->RenderUi(ui);
 }
 
 void ReloadableGame::Shutdown()
 {
+    std::scoped_lock lock(gameMutex_);
     if (loaded_)
     {
         loaded_->instance->Shutdown();
+        initialized_ = false;
     }
 }
+
+#if defined(ENGINE_AUTOTESTS)
+void ReloadableGame::SerializeAutoTestState(Engine::Serializer& serializer)
+{
+    std::scoped_lock lock(gameMutex_);
+    loaded_->instance->SerializeAutoTestState(serializer);
+}
+
+void ReloadableGame::ProcessAutoTestReload()
+{
+    std::scoped_lock lock(gameMutex_);
+    ProcessReloadRequest();
+}
+#endif
 
 std::unique_ptr<ReloadableGame::LoadedGame>
 ReloadableGame::LoadNextGeneration()
@@ -162,9 +184,15 @@ void ReloadableGame::ProcessReloadRequest()
     try
     {
         std::unique_ptr<LoadedGame> next = LoadNextGeneration();
-        next->instance->Initialize();
+        if (initialized_)
+        {
+            next->instance->Initialize();
+        }
 
-        loaded_->instance->Shutdown();
+        if (initialized_)
+        {
+            loaded_->instance->Shutdown();
+        }
         loaded_ = std::move(next);
         SetReloadStatus(
             "Reloaded Game generation " + std::to_string(generation_) + ".");

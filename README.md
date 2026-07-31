@@ -472,13 +472,43 @@ powershell -File Tools/GameDev.ps1 logs -Game MyGame -Follow -Lines 40
 powershell -File Tools/GameDev.ps1 reload-wait -BuildDirectory build
 ```
 
-Available commands are `start`, `ping`, `build`, `reload`, `reload-wait`,
+Available commands are `start`, `ping`, `state`, `build`, `reload`, `reload-wait`,
 `build-reload`, `logs`, and `verify`. `build-reload` asks GameHost to run its
 controlled incremental Game build before requesting the hot reload. `verify`
 pings the host, requests a reload, waits for its final
 status, and reports the available logs. The controller rejects paths containing
 a `Release` directory. It is not part of `GameRelease` and is never copied into
 the shipped game.
+
+## Automated tests
+
+The development test framework has two headless suites:
+
+- `Engine.Pure` tests Engine math, value defaults, and deterministic injected
+  input without creating a window or touching raylib's live input state.
+- `Game.HeadlessHotReload` loads `Game.dll` in-process, reads entity state
+  directly through the development ABI, advances gameplay with a controlled
+  delta time and injected input, loads a second DLL generation, and verifies
+  that entity state remains inspectable afterward.
+
+Build and run them with:
+
+```powershell
+cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
+cmake --build Games/MyGame/build --config Debug --target AutoTests
+ctest --test-dir Games/MyGame/build -C Debug --output-on-failure
+```
+
+No test calls `InitWindow`, `Render`, `RenderUi`, shader initialization, or GPU
+APIs, so gameplay and hot-reload tests can run in GitHub Actions without a
+visible window. `.github/workflows/auto-tests.yml` runs the suites on a Windows
+runner using `BaseGame`.
+
+All state inspection hooks, injected input, and IPC state commands are guarded
+by `ENGINE_AUTOTESTS`, which CMake defines only outside the Release
+configuration. The test executables are excluded from normal builds and are
+not dependencies of `GameRelease`; the shipped executable contains none of
+this instrumentation.
 
 ## BaseGame controls
 

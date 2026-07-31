@@ -32,12 +32,47 @@ namespace Engine
 
     bool InputSystem::IsDown(Key key) const
     {
+#if defined(ENGINE_AUTOTESTS)
+        if (autoTestInput_)
+        {
+            return autoTestDown_[static_cast<std::size_t>(key)];
+        }
+#endif
         return IsKeyDown(ToRaylibKey(key));
     }
 
     bool InputSystem::WasPressed(Key key) const
     {
+#if defined(ENGINE_AUTOTESTS)
+        if (autoTestInput_)
+        {
+            return autoTestPressed_[static_cast<std::size_t>(key)];
+        }
+#endif
         return IsKeyPressed(ToRaylibKey(key));
     }
-}
 
+#if defined(ENGINE_AUTOTESTS)
+    void InputSystem::EnableAutoTestInput()
+    {
+        autoTestInput_ = true;
+    }
+
+    void InputSystem::SetAutoTestKeyDown(Key key, bool down)
+    {
+        autoTestInput_ = true;
+        autoTestDown_[static_cast<std::size_t>(key)] = down;
+    }
+
+    void InputSystem::SetAutoTestKeyPressed(Key key, bool pressed)
+    {
+        autoTestInput_ = true;
+        autoTestPressed_[static_cast<std::size_t>(key)] = pressed;
+    }
+
+    void InputSystem::ClearAutoTestPressedKeys()
+    {
+        autoTestPressed_.fill(false);
+    }
+#endif
+}

@@ -36,6 +36,10 @@ public:
     void Render(Engine::RenderContext& context) const override;
     void RenderUi(Engine::UiSystem& ui) override;
     void Shutdown() override;
+#if defined(ENGINE_AUTOTESTS)
+    void SerializeAutoTestState(Engine::Serializer& serializer) override;
+    void ProcessAutoTestReload();
+#endif
 
 private:
     struct LoadedGame;
@@ -49,6 +53,8 @@ private:
     std::unique_ptr<LoadedGame> loaded_;
     Engine::GameApplicationConfig applicationConfig_{};
     std::atomic_bool reloadRequested_ = false;
+    bool initialized_ = false;
+    mutable std::recursive_mutex gameMutex_;
     std::uint64_t generation_ = 0;
     mutable std::mutex statusMutex_;
     std::string reloadStatus_ = "Initial Game module loaded.";

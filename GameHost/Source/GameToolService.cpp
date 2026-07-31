@@ -3,6 +3,7 @@
 #include "GameHost/ReloadableGame.h"
 
 #include "Engine/Core/Logger.h"
+#include "Engine/Serialization/Serializer.h"
 
 #include <algorithm>
 #include <array>
@@ -30,6 +31,40 @@ namespace
     constexpr std::size_t MaximumBatchFiles = 16;
     constexpr std::size_t MaximumBatchPatches = 32;
     constexpr std::size_t MaximumBatchReadSize = 3 * 1024 * 1024;
+
+#if defined(ENGINE_AUTOTESTS)
+    class JsonStateSerializer final : public Engine::Serializer
+    {
+    public:
+        void Value(std::string_view name, bool& value) override
+        {
+            values_[std::string(name)] = value;
+        }
+
+        void Value(std::string_view name, int& value) override
+        {
+            values_[std::string(name)] = value;
+        }
+
+        void Value(std::string_view name, float& value) override
+        {
+            values_[std::string(name)] = value;
+        }
+
+        void Value(std::string_view name, std::string& value) override
+        {
+            values_[std::string(name)] = value;
+        }
+
+        [[nodiscard]] nlohmann::json TakeValues()
+        {
+            return std::move(values_);
+        }
+
+    private:
+        nlohmann::json values_ = nlohmann::json::object();
+    };
+#endif
 
     bool IsAllowedSourceExtension(const std::filesystem::path& path)
     {
@@ -526,6 +561,18 @@ std::string GameToolService::HandleRequest(std::string_view request)
                 ? game_->GetReloadStatus()
                 : "Game is stopped for crash recovery."}};
         }
+#if defined(ENGINE_AUTOTESTS)
+        else if (command == "get_game_state")
+        {
+            if (!game_)
+            {
+                throw std::runtime_error("Game is not running.");
+            }
+            JsonStateSerializer serializer;
+            game_->SerializeAutoTestState(serializer);
+            result = {{"entities", serializer.TakeValues()}};
+        }
+#endif
         else if (command == "inspect_crash_diagnostics")
         {
             result = nlohmann::json::parse(ReadCrashDiagnostics());

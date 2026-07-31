@@ -98,7 +98,7 @@ add_library(Engine SHARED
 )
 
 target_include_directories(Engine PUBLIC Engine/Include)
-target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json)
+target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
 if(WIN32)
     target_link_libraries(Engine PRIVATE winhttp)
     target_link_libraries(
@@ -109,6 +109,8 @@ if(WIN32)
         "$<$<NOT:$<CONFIG:Release>>:ENGINE_CRASH_DIAGNOSTICS>")
 endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
+target_compile_definitions(
+    Engine PUBLIC "$<$<NOT:$<CONFIG:Release>>:ENGINE_AUTOTESTS>")
 target_compile_definitions(
     Engine PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
@@ -198,3 +200,35 @@ foreach(target Engine Game GameHost AssistantHost Launcher GameRelease)
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endforeach()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(EngineTests EXCLUDE_FROM_ALL
+        Tests/EngineTests.cpp
+    )
+    target_link_libraries(EngineTests PRIVATE Engine)
+
+    add_executable(HotReloadTests EXCLUDE_FROM_ALL
+        Tests/HotReloadTests.cpp
+        GameHost/Source/ReloadableGame.cpp
+    )
+    target_include_directories(HotReloadTests PRIVATE GameHost/Include)
+    target_link_libraries(HotReloadTests PRIVATE Engine)
+    add_dependencies(HotReloadTests Game)
+
+    foreach(target EngineTests HotReloadTests)
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /W4 /permissive-)
+        else()
+            target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+    endforeach()
+
+    add_custom_target(AutoTests DEPENDS EngineTests HotReloadTests)
+    add_test(NAME Engine.Pure COMMAND EngineTests)
+    add_test(
+        NAME Game.HeadlessHotReload
+        COMMAND HotReloadTests
+            $<TARGET_FILE:Game>
+            $<TARGET_FILE_DIR:HotReloadTests>/AutoTestHotReload)
+endif()

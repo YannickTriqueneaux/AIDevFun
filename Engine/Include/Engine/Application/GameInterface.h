@@ -6,6 +6,7 @@ namespace Engine
 {
     class InputSystem;
     class RenderContext;
+    class Serializer;
     class UiSystem;
 
     class GameInterface
@@ -19,5 +20,9 @@ namespace Engine
         virtual void Render(RenderContext& context) const = 0;
         virtual void RenderUi(UiSystem&) {}
         virtual void Shutdown() {}
+#if defined(ENGINE_AUTOTESTS)
+        // Development-only, in-process state inspection hook.
+        virtual void SerializeAutoTestState(Serializer&) {}
+#endif
     };
 }
