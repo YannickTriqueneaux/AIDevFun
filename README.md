@@ -445,6 +445,41 @@ Assistant logs contain prompts, response IDs, bounded tool arguments/results,
 and streaming status. GameHost logs contain controlled builds, IPC requests,
 and DLL reload results.
 
+### Codex development control
+
+`Tools/GameDev.ps1` gives external development agents a scriptable control
+surface over a Debug session. It starts the launcher, calls the existing
+game-specific IPC service, waits for a hot reload, and tails process logs.
+
+This allows an external coding agent such as Codex or Claude Code to run the
+same observe-edit-reload-verify loop as the in-game Assistant. Unlike the
+Assistant's deliberately restricted Game-source tools, an external agent can
+iterate across the complete development workspace when authorized: `Game.dll`,
+Engine, GameHost, AssistantHost, Launcher, development scripts, and the build
+system. Changes outside `Game.dll` require rebuilding and restarting the
+affected development processes; Game-only changes can continue to use hot
+reload. This control surface is strictly for development and is excluded from
+the shipped Release executable.
+
+```powershell
+# Standard per-game build (Games/MyGame/build/Debug)
+powershell -File Tools/GameDev.ps1 start -Game MyGame
+powershell -File Tools/GameDev.ps1 build-reload -Game MyGame
+powershell -File Tools/GameDev.ps1 verify -Game MyGame
+powershell -File Tools/GameDev.ps1 logs -Game MyGame -Follow -Lines 40
+
+# A build directory configured elsewhere
+powershell -File Tools/GameDev.ps1 reload-wait -BuildDirectory build
+```
+
+Available commands are `start`, `ping`, `build`, `reload`, `reload-wait`,
+`build-reload`, `logs`, and `verify`. `build-reload` asks GameHost to run its
+controlled incremental Game build before requesting the hot reload. `verify`
+pings the host, requests a reload, waits for its final
+status, and reports the available logs. The controller rejects paths containing
+a `Release` directory. It is not part of `GameRelease` and is never copied into
+the shipped game.
+
 ## BaseGame controls
 
 - Move: arrow keys
