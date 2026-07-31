@@ -2,30 +2,19 @@
 
 #include "Engine/Math/Vector2.h"
 
-namespace Engine
-{
-    class InputSystem;
+namespace Engine {
+class InputSystem;
 }
 
-enum class PlayerAction
-{
-    None,
-    Dash,
-    Pulse,
-    ToggleShield,
-    Reset
+enum class PlayerAction { None, Dash, Pulse, ToggleShield, Reset };
+
+struct PlayerCommand {
+  Engine::Vector2 movement{};
+  PlayerAction action = PlayerAction::None;
 };
 
-struct PlayerCommand
-{
-    Engine::Vector2 movement{};
-    PlayerAction action = PlayerAction::None;
-};
-
-class GameInput
-{
+class GameInput {
 public:
-    [[nodiscard]] PlayerCommand BuildPlayerCommand(
-        const Engine::InputSystem& input) const;
+  [[nodiscard]] PlayerCommand
+  BuildPlayerCommand(const Engine::InputSystem &input) const;
 };
-

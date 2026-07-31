@@ -9,53 +9,41 @@
 #include <utility>
 
 #if defined(_WIN32)
-    #define WIN32_LEAN_AND_MEAN
-    #include <Windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 #endif
 
 #ifndef MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
-    #define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "Game"
+#define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "Game"
 #endif
 
-namespace
-{
-    int RunReleasedGame()
-    {
-        const std::filesystem::path executableDirectory =
-            std::filesystem::current_path();
-        Engine::CrashDiagnostics::Install(
-            executableDirectory / "Crashes",
-            MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT);
-        const Engine::GameApplicationConfig gameConfig =
-            GameConfig::CreateApplicationConfig();
-        Engine::ApplicationConfig applicationConfig{
-            .windowWidth = gameConfig.windowWidth,
-            .windowHeight = gameConfig.windowHeight,
-            .targetFramesPerSecond = gameConfig.targetFramesPerSecond,
-            .windowTitle = MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT,
-            .focusWindowTitle = {},
-            .verticalSync = gameConfig.verticalSync
-        };
+namespace {
+int RunReleasedGame() {
+  const std::filesystem::path executableDirectory =
+      std::filesystem::current_path();
+  Engine::CrashDiagnostics::Install(executableDirectory / "Crashes",
+                                    MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT);
+  const Engine::GameApplicationConfig gameConfig =
+      GameConfig::CreateApplicationConfig();
+  Engine::ApplicationConfig applicationConfig{
+      .windowWidth = gameConfig.windowWidth,
+      .windowHeight = gameConfig.windowHeight,
+      .targetFramesPerSecond = gameConfig.targetFramesPerSecond,
+      .windowTitle = MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT,
+      .focusWindowTitle = {},
+      .verticalSync = gameConfig.verticalSync};
 
-        Engine::Application application(std::move(applicationConfig));
-        ProceduralGame game;
-        application.Run(game);
-        return 0;
-    }
+  Engine::Application application(std::move(applicationConfig));
+  ProceduralGame game;
+  application.Run(game);
+  return 0;
 }
+} // namespace
 
 #if defined(_WIN32)
-int WINAPI WinMain(
-    HINSTANCE,
-    HINSTANCE,
-    LPSTR,
-    int)
-{
-    return RunReleasedGame();
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+  return RunReleasedGame();
 }
 #else
-int main()
-{
-    return RunReleasedGame();
-}
+int main() { return RunReleasedGame(); }
 #endif

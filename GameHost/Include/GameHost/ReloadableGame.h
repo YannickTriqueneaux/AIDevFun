@@ -9,53 +9,50 @@
 #include <mutex>
 #include <string>
 
-namespace Engine
-{
-    class DynamicLibrary;
+namespace Engine {
+class DynamicLibrary;
 }
 
-class ReloadableGame final : public Engine::GameInterface
-{
+class ReloadableGame final : public Engine::GameInterface {
 public:
-    ReloadableGame(
-        std::filesystem::path sourceDll,
-        std::filesystem::path shadowDirectory);
-    ~ReloadableGame() override;
+  ReloadableGame(std::filesystem::path sourceDll,
+                 std::filesystem::path shadowDirectory);
+  ~ReloadableGame() override;
 
-    ReloadableGame(const ReloadableGame&) = delete;
-    ReloadableGame& operator=(const ReloadableGame&) = delete;
+  ReloadableGame(const ReloadableGame &) = delete;
+  ReloadableGame &operator=(const ReloadableGame &) = delete;
 
-    [[nodiscard]] Engine::GameApplicationConfig GetApplicationConfig() const;
-    void RequestReload();
-    [[nodiscard]] std::string GetReloadStatus() const;
-    void Unload();
+  [[nodiscard]] Engine::GameApplicationConfig GetApplicationConfig() const;
+  void RequestReload();
+  [[nodiscard]] std::string GetReloadStatus() const;
+  void Unload();
 
-    void Initialize() override;
-    void Update(const Engine::InputSystem& input, float deltaTime) override;
-    [[nodiscard]] Engine::Color GetClearColor() const override;
-    void Render(Engine::RenderContext& context) const override;
-    void RenderUi(Engine::UiSystem& ui) override;
-    void Shutdown() override;
+  void Initialize() override;
+  void Update(const Engine::InputSystem &input, float deltaTime) override;
+  [[nodiscard]] Engine::Color GetClearColor() const override;
+  void Render(Engine::RenderContext &context) const override;
+  void RenderUi(Engine::UiSystem &ui) override;
+  void Shutdown() override;
 #if defined(ENGINE_AUTOTESTS)
-    void SerializeAutoTestState(Engine::Serializer& serializer) override;
-    void ProcessAutoTestReload();
+  void SerializeAutoTestState(Engine::Serializer &serializer) override;
+  void ProcessAutoTestReload();
 #endif
 
 private:
-    struct LoadedGame;
+  struct LoadedGame;
 
-    [[nodiscard]] std::unique_ptr<LoadedGame> LoadNextGeneration();
-    void ProcessReloadRequest();
-    void SetReloadStatus(std::string status);
+  [[nodiscard]] std::unique_ptr<LoadedGame> LoadNextGeneration();
+  void ProcessReloadRequest();
+  void SetReloadStatus(std::string status);
 
-    std::filesystem::path sourceDll_;
-    std::filesystem::path shadowDirectory_;
-    std::unique_ptr<LoadedGame> loaded_;
-    Engine::GameApplicationConfig applicationConfig_{};
-    std::atomic_bool reloadRequested_ = false;
-    bool initialized_ = false;
-    mutable std::recursive_mutex gameMutex_;
-    std::uint64_t generation_ = 0;
-    mutable std::mutex statusMutex_;
-    std::string reloadStatus_ = "Initial Game module loaded.";
+  std::filesystem::path sourceDll_;
+  std::filesystem::path shadowDirectory_;
+  std::unique_ptr<LoadedGame> loaded_;
+  Engine::GameApplicationConfig applicationConfig_{};
+  std::atomic_bool reloadRequested_ = false;
+  bool initialized_ = false;
+  mutable std::recursive_mutex gameMutex_;
+  std::uint64_t generation_ = 0;
+  mutable std::mutex statusMutex_;
+  std::string reloadStatus_ = "Initial Game module loaded.";
 };

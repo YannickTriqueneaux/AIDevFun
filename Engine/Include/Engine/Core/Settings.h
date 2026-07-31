@@ -5,18 +5,13 @@
 
 #include <filesystem>
 
-namespace Engine
-{
-    struct LauncherSettings
-    {
-        OpenAISettings openAI;
-    };
+namespace Engine {
+struct LauncherSettings {
+  OpenAISettings openAI;
+};
 
-    class ENGINE_API Settings
-    {
-    public:
-        [[nodiscard]] static LauncherSettings Load(
-            const std::filesystem::path& path);
-    };
-}
-
+class ENGINE_API Settings {
+public:
+  [[nodiscard]] static LauncherSettings Load(const std::filesystem::path &path);
+};
+} // namespace Engine

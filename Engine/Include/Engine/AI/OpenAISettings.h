@@ -4,17 +4,14 @@
 
 #include <string>
 
-namespace Engine
-{
-    struct OpenAISettings
-    {
-        std::string apiKey;
-        std::string model = "gpt-5.5";
-        OpenAIPricingSettings pricing;
+namespace Engine {
+struct OpenAISettings {
+  std::string apiKey;
+  std::string model = "gpt-5.5";
+  OpenAIPricingSettings pricing;
 
-        [[nodiscard]] bool IsConfigured() const
-        {
-            return !apiKey.empty() && !model.empty();
-        }
-    };
-}
+  [[nodiscard]] bool IsConfigured() const {
+    return !apiKey.empty() && !model.empty();
+  }
+};
+} // namespace Engine

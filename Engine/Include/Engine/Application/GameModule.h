@@ -4,27 +4,24 @@
 
 #include <cstdint>
 
-namespace Engine
-{
-    inline constexpr std::uint32_t GameModuleApiVersion = 3;
-    inline constexpr const char* GetGameModuleApiFunctionName = "GetGameModuleApi";
+namespace Engine {
+inline constexpr std::uint32_t GameModuleApiVersion = 3;
+inline constexpr const char *GetGameModuleApiFunctionName = "GetGameModuleApi";
 
-    struct GameApplicationConfig
-    {
-        int windowWidth = 1280;
-        int windowHeight = 720;
-        int targetFramesPerSecond = 144;
-        const char* windowTitle = "Game";
-        bool verticalSync = true;
-    };
+struct GameApplicationConfig {
+  int windowWidth = 1280;
+  int windowHeight = 720;
+  int targetFramesPerSecond = 144;
+  const char *windowTitle = "Game";
+  bool verticalSync = true;
+};
 
-    struct GameModuleApi
-    {
-        std::uint32_t apiVersion = 0;
-        GameApplicationConfig (*getApplicationConfig)() = nullptr;
-        GameInterface* (*createGame)() = nullptr;
-        void (*destroyGame)(GameInterface*) = nullptr;
-    };
+struct GameModuleApi {
+  std::uint32_t apiVersion = 0;
+  GameApplicationConfig (*getApplicationConfig)() = nullptr;
+  GameInterface *(*createGame)() = nullptr;
+  void (*destroyGame)(GameInterface *) = nullptr;
+};
 
-    using GetGameModuleApiFunction = const GameModuleApi* (*)();
-}
+using GetGameModuleApiFunction = const GameModuleApi *(*)();
+} // namespace Engine
