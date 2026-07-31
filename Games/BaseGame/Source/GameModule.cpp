@@ -2,6 +2,7 @@
 #include "Game/GameConfig.h"
 
 #include "Engine/Application/GameModule.h"
+#include "Engine/Core/Memory.h"
 
 #if defined(_WIN32)
     #define GAME_MODULE_API extern "C" __declspec(dllexport)
@@ -13,12 +14,13 @@ namespace
 {
     Engine::GameInterface* CreateGame()
     {
-        return new ProceduralGame();
+        return NEW_MEMORY(ProceduralGame).release();
     }
 
     void DestroyGame(Engine::GameInterface* game)
     {
-        delete game;
+        auto* concreteGame = static_cast<ProceduralGame*>(game);
+        DELETE_MEMORY(concreteGame);
     }
 
     Engine::GameApplicationConfig GetApplicationConfig()

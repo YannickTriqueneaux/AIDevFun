@@ -73,6 +73,16 @@ int main(int argc, char** argv)
         RecordingSerializer afterReload;
         game.SerializeAutoTestState(afterReload);
         Require(!afterReload.values.empty(), "Entity state was unavailable after reload.");
+        if(afterReload.values!=afterTick.values)
+        {
+            for(const auto& [name,value]:afterTick.values)
+            {
+                const auto found=afterReload.values.find(name);
+                if(found==afterReload.values.end()||found->second!=value)std::cerr<<"Changed after reload: "<<name<<'\n';
+            }
+        }
+        Require(afterReload.values == afterTick.values,
+            "Entity/component state or ObjectIDs changed across DLL reload.");
 
         std::cout << "Headless gameplay and hot reload passed with "
                   << afterReload.values.size() << " state fields.\n";

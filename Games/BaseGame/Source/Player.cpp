@@ -3,8 +3,10 @@
 #include "Game/GameConfig.h"
 
 #include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Gameplay/ObjectManager.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 
 namespace
@@ -48,27 +50,37 @@ namespace
     }
 }
 
-Player::Player()
+Player::Player(Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> owner)
+    : Component(owner)
 {
     Reset();
 }
 
-void Player::Update(const PlayerCommand& command, float deltaTime)
+void Player::Update(Engine::Gameplay::ObjectManager& objects, float deltaTime)
 {
+    auto* entity = GetOwner().Resolve(objects);
+    if (entity == nullptr) return;
+    auto& position = entity->transform.position;
+    const PlayerCommand command = command_;
+    command_ = {};
     if (command.movement.x != 0.0f || command.movement.y != 0.0f)
     {
         facing_ = command.movement;
     }
 
-    position_ += command.movement * (movementSpeed_ * deltaTime);
+    position += command.movement * (movementSpeed_ * deltaTime);
 
-    ExecuteAction(command.action);
+    if (command.action == PlayerAction::Dash) { position += facing_ * DashDistance; ExecuteAction(command.action); }
+    else if(command.action==PlayerAction::Reset){Reset();position={static_cast<float>(GameConfig::PlayAreaWidth)*0.5f,static_cast<float>(GameConfig::PlayAreaHeight)*0.5f};lastAction_="Reset";}
+    else ExecuteAction(command.action);
     pulseTimeRemaining_ = std::max(0.0f, pulseTimeRemaining_ - deltaTime);
-    KeepInsidePlayArea();
+    position.x = std::clamp(position.x, PlayerHalfSize, static_cast<float>(GameConfig::PlayAreaWidth)-PlayerHalfSize);
+    position.y = std::clamp(position.y, PlayerHalfSize, static_cast<float>(GameConfig::PlayAreaHeight)-PlayerHalfSize);
 }
 
-void Player::Render(Engine::Renderer2D& renderer) const
+void Player::Render(Engine::Renderer2D& renderer,const Engine::Gameplay::ObjectManager& objects) const
 {
+    const auto* entity=GetOwner().Resolve(objects); if(entity==nullptr)return; const auto position=entity->transform.position;
     if (pulseTimeRemaining_ > 0.0f)
     {
         const float progress = 1.0f - pulseTimeRemaining_ / PulseDuration;
@@ -77,7 +89,7 @@ void Player::Render(Engine::Renderer2D& renderer) const
             static_cast<std::uint8_t>((1.0f - progress) * 220.0f);
         DrawSquareOutline(
             renderer,
-            position_,
+            position,
             halfSize,
             {255, 184, 77, alpha});
     }
@@ -86,20 +98,20 @@ void Player::Render(Engine::Renderer2D& renderer) const
     {
         DrawSquareOutline(
             renderer,
-            position_,
+            position,
             PlayerHalfSize + 10.0f,
             {102, 191, 255, 255});
         DrawSquareOutline(
             renderer,
-            position_,
+            position,
             PlayerHalfSize + 12.0f,
             {0, 121, 241, 255});
     }
 
-    DrawSquare(renderer, position_, PlayerHalfSize, {86, 204, 157, 255});
+    DrawSquare(renderer, position, PlayerHalfSize, {86, 204, 157, 255});
     renderer.DrawLine(
-        position_,
-        position_ + facing_ * 36.0f,
+        position,
+        position + facing_ * 36.0f,
         5.0f,
         {245, 245, 245, 255});
 }
@@ -123,14 +135,15 @@ void Player::RenderHud(Engine::Renderer2D& renderer) const
         {255, 203, 0, 255});
 }
 
-void Player::Serialize(Engine::Serializer& serializer)
+void Player::SaveState(Engine::Gameplay::StateWriter& writer) const
 {
-    serializer.Value("position.x", position_.x);
-    serializer.Value("position.y", position_.y);
-    serializer.Value("facing.x", facing_.x);
-    serializer.Value("facing.y", facing_.y);
-    serializer.Value("movementSpeed", movementSpeed_);
-    serializer.Value("shieldEnabled", shieldEnabled_);
+    writer.Value(facing_); writer.Value(movementSpeed_); writer.Value(pulseTimeRemaining_); writer.Value(shieldEnabled_);
+}
+
+void Player::LoadState(Engine::Gameplay::StateReader& reader,std::uint32_t version)
+{
+    if(version!=1) throw std::runtime_error("Unsupported Player state version.");
+    facing_=reader.Value<Engine::Vector2>(); movementSpeed_=reader.Value<float>(); pulseTimeRemaining_=reader.Value<float>(); shieldEnabled_=reader.Value<bool>();
 }
 
 void Player::ExecuteAction(PlayerAction action)
@@ -138,7 +151,6 @@ void Player::ExecuteAction(PlayerAction action)
     switch (action)
     {
     case PlayerAction::Dash:
-        position_ += facing_ * DashDistance;
         lastAction_ = "Dash";
         break;
     case PlayerAction::Pulse:
@@ -160,22 +172,10 @@ void Player::ExecuteAction(PlayerAction action)
 
 void Player::KeepInsidePlayArea()
 {
-    position_.x = std::clamp(
-        position_.x,
-        PlayerHalfSize,
-        static_cast<float>(GameConfig::PlayAreaWidth) - PlayerHalfSize);
-    position_.y = std::clamp(
-        position_.y,
-        PlayerHalfSize,
-        static_cast<float>(GameConfig::PlayAreaHeight) - PlayerHalfSize);
 }
 
 void Player::Reset()
 {
-    position_ = {
-        static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
-        static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f
-    };
     facing_ = {1.0f, 0.0f};
     pulseTimeRemaining_ = 0.0f;
     shieldEnabled_ = false;

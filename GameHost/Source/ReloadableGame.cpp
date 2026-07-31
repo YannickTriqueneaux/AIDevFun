@@ -183,7 +183,12 @@ void ReloadableGame::ProcessReloadRequest()
 
     try
     {
+        const std::vector<std::byte> resumeState = loaded_->instance->SaveResumeState();
         std::unique_ptr<LoadedGame> next = LoadNextGeneration();
+        if (!resumeState.empty())
+        {
+            next->instance->ResumeFromState(resumeState);
+        }
         if (initialized_)
         {
             next->instance->Initialize();

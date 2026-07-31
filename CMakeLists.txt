@@ -83,9 +83,12 @@ add_library(Engine SHARED
     Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
     Engine/Source/Logger.cpp
+    Engine/Source/Memory.cpp
     Engine/Source/NamedPipe.cpp
     Engine/Source/OpenAIClient.cpp
     Engine/Source/OpenAIPricing.cpp
+    Engine/Source/ObjectManager.cpp
+    Engine/Source/ObjectMemory.cpp
     Engine/Source/PromptConsole.cpp
     Engine/Source/PromptProcessor.cpp
     Engine/Source/RenderContext.cpp
@@ -93,6 +96,7 @@ add_library(Engine SHARED
     Engine/Source/Renderer3D.cpp
     Engine/Source/ShaderProgram.cpp
     Engine/Source/Settings.cpp
+    Engine/Source/World.cpp
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
 )
@@ -160,12 +164,16 @@ add_executable(GameRelease WIN32
     Engine/Source/Application.cpp
     Engine/Source/CrashDiagnostics.cpp
     Engine/Source/InputSystem.cpp
+    Engine/Source/Memory.cpp
+    Engine/Source/ObjectManager.cpp
+    Engine/Source/ObjectMemory.cpp
     Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
     Engine/Source/Renderer3D.cpp
     Engine/Source/ShaderProgram.cpp
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
+    Engine/Source/World.cpp
     ${ACTIVE_GAME_DIR}/Source/Game.cpp
     ${ACTIVE_GAME_DIR}/Source/GameInput.cpp
     ${ACTIVE_GAME_DIR}/Source/Player.cpp
@@ -203,6 +211,16 @@ endforeach()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_library(BaseGameTestModule SHARED
+        Games/BaseGame/Source/GameModule.cpp
+        Games/BaseGame/Source/Game.cpp
+        Games/BaseGame/Source/GameInput.cpp
+        Games/BaseGame/Source/Player.cpp
+    )
+    target_include_directories(BaseGameTestModule PRIVATE Games/BaseGame/Include)
+    target_link_libraries(BaseGameTestModule PRIVATE Engine)
+    target_compile_definitions(BaseGameTestModule PRIVATE GAME_MODULE_BUILD)
+
     add_executable(EngineTests EXCLUDE_FROM_ALL
         Tests/EngineTests.cpp
     )
@@ -214,9 +232,9 @@ if(BUILD_TESTING)
     )
     target_include_directories(HotReloadTests PRIVATE GameHost/Include)
     target_link_libraries(HotReloadTests PRIVATE Engine)
-    add_dependencies(HotReloadTests Game)
+    add_dependencies(HotReloadTests BaseGameTestModule)
 
-    foreach(target EngineTests HotReloadTests)
+    foreach(target EngineTests HotReloadTests BaseGameTestModule)
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4 /permissive-)
         else()
@@ -229,6 +247,6 @@ if(BUILD_TESTING)
     add_test(
         NAME Game.HeadlessHotReload
         COMMAND HotReloadTests
-            $<TARGET_FILE:Game>
+            $<TARGET_FILE:BaseGameTestModule>
             $<TARGET_FILE_DIR:HotReloadTests>/AutoTestHotReload)
 endif()
