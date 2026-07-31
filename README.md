@@ -307,8 +307,8 @@ GameHotReload/
 ```
 
 GameHost loads the next generation without restarting the Engine or Assistant.
-The current implementation initializes a fresh game instance during a reload,
-so transient runtime game state may reset.
+Whenever possible, the Engine restores the running game so play can continue
+from where it was interrupted, even after the game code has changed.
 
 ### Persistent conversation
 
@@ -489,7 +489,7 @@ The development test framework has two headless suites:
 - `Game.HeadlessHotReload` loads `Game.dll` in-process, reads entity state
   directly through the development ABI, advances gameplay with a controlled
   delta time and injected input, loads a second DLL generation, and verifies
-  that entity state remains inspectable afterward.
+  that the game can continue afterward.
 
 Build and run them with:
 
