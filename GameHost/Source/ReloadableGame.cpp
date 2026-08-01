@@ -1,5 +1,6 @@
 #include "GameHost/ReloadableGame.h"
 
+#include "Engine/Application/GameInstance.h"
 #include "Engine/Core/Logger.h"
 #include "Engine/Graphics/RenderContext.h"
 #include "Engine/Input/InputSystem.h"
@@ -146,10 +147,12 @@ void ReloadableGame::ProcessReloadRequest() {
     return;
   }
 
+  Engine::GameInstance *previousInstance = Engine::GameInstance::GetInstance();
   try {
     const std::vector<std::byte> resumeState =
         loaded_->instance->SaveResumeState();
     std::unique_ptr<LoadedGame> next = LoadNextGeneration();
+    Engine::GameInstance *nextInstance = Engine::GameInstance::GetInstance();
     if (!resumeState.empty()) {
       next->instance->ResumeFromState(resumeState);
     }
@@ -158,7 +161,11 @@ void ReloadableGame::ProcessReloadRequest() {
     }
 
     if (initialized_) {
+      if (previousInstance)
+        previousInstance->Activate();
       loaded_->instance->Shutdown();
+      if (nextInstance)
+        nextInstance->Activate();
     }
     loaded_ = std::move(next);
     SetReloadStatus("Reloaded Game generation " + std::to_string(generation_) +
@@ -166,6 +173,8 @@ void ReloadableGame::ProcessReloadRequest() {
     Engine::Logger::Info("Reloaded Game DLL generation " +
                          std::to_string(generation_) + ".");
   } catch (const std::exception &exception) {
+    if (previousInstance)
+      previousInstance->Activate();
     SetReloadStatus(std::string("Reload failed: ") + exception.what());
     Engine::Logger::Error(std::string("Game DLL reload failed: ") +
                           exception.what());

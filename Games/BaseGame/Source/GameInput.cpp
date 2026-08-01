@@ -27,15 +27,7 @@ GameInput::BuildPlayerCommand(const Engine::InputSystem &input) const {
                        static_cast<float>(input.IsDown(Engine::Key::Up));
   command.movement = NormalizeOrZero(command.movement);
 
-  if (input.WasPressed(Engine::Key::Q)) {
-    command.action = PlayerAction::Dash;
-  } else if (input.WasPressed(Engine::Key::W)) {
-    command.action = PlayerAction::Pulse;
-  } else if (input.WasPressed(Engine::Key::E)) {
-    command.action = PlayerAction::ToggleShield;
-  } else if (input.WasPressed(Engine::Key::R)) {
-    command.action = PlayerAction::Reset;
-  }
+  command.firing = input.IsDown(Engine::Key::W);
 
   return command;
 }

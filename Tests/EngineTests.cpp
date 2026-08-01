@@ -1,3 +1,4 @@
+#include "Engine/Application/GameInstance.h"
 #include "Engine/Core/Memory.h"
 #include "Engine/Gameplay/World.h"
 #include "Engine/Graphics/Color.h"
@@ -27,7 +28,7 @@ public:
   TypeID GetTypeID() const override { return type_; }
   std::uint32_t CurrentStateVersion() const override { return 2; }
   std::uint32_t MinimumStateVersion() const override { return 1; }
-  void Update(ObjectManager &, float) override {
+  void Update(float) override {
     updateOrder.push_back(marker_);
     ++ticks;
   }
@@ -44,8 +45,35 @@ private:
   int marker_;
 };
 
-World MakeTestWorld() {
-  World w;
+class TestGameInstanceComponent final : public Engine::GameInstanceComponent {
+public:
+  static constexpr TypeID Type = StableTypeID("Tests.GameInstanceComponent");
+  explicit TestGameInstanceComponent(int initialValue) : value(initialValue) {}
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+  int value = 0;
+};
+
+std::vector<int> gameInstanceComponentDestructionOrder;
+
+class FirstInstanceComponent final : public Engine::GameInstanceComponent {
+public:
+  static constexpr TypeID Type = StableTypeID("Tests.FirstInstanceComponent");
+  ~FirstInstanceComponent() override {
+    gameInstanceComponentDestructionOrder.push_back(1);
+  }
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+};
+
+class SecondInstanceComponent final : public Engine::GameInstanceComponent {
+public:
+  static constexpr TypeID Type = StableTypeID("Tests.SecondInstanceComponent");
+  ~SecondInstanceComponent() override {
+    gameInstanceComponentDestructionOrder.push_back(2);
+  }
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+};
+
+void ConfigureTestWorld(World &w) {
   w.RegisterComponent({FirstType, "First", [](ObjectRef<Entity> owner) {
                          return NEW_OBJECT(TestComponent, owner, FirstType, 1);
                        }});
@@ -53,17 +81,14 @@ World MakeTestWorld() {
                          return NEW_OBJECT(TestComponent, owner, SecondType, 2);
                        }});
   w.RegisterEntity({TestEntity, "TestEntity", {SecondType, FirstType}});
-  return w;
 }
 
-World MakeReplacementWorld() {
-  World w;
+void ConfigureReplacementWorld(World &w) {
   w.RegisterComponent({FirstType, "First", [](ObjectRef<Entity> owner) {
                          return NEW_OBJECT(TestComponent, owner, FirstType, 1);
                        }});
   w.RegisterEntity(
       {StableTypeID("Tests.ReplacementEntity"), "Replacement", {FirstType}});
-  return w;
 }
 
 void Require(bool condition, const char *message) {
@@ -80,6 +105,65 @@ void RequireThrows(Function &&function, const char *message) {
     return;
   }
   throw std::runtime_error(message);
+}
+
+void TestGameInstanceLifecycle() {
+  Require(Engine::GameInstance::GetInstance() == nullptr,
+          "GameInstance singleton was not initially empty.");
+
+  auto firstOwner = NEW_MEMORY(Engine::GameInstance);
+  auto secondOwner = NEW_MEMORY(Engine::GameInstance);
+  Require(Engine::GameInstance::GetInstance() == secondOwner.get(),
+          "The newest GameInstance was not activated.");
+  DELETE_MEMORY(firstOwner);
+  Require(Engine::GameInstance::GetInstance() == secondOwner.get(),
+          "Destroying an inactive GameInstance cleared the active singleton.");
+  DELETE_MEMORY(secondOwner);
+  Require(Engine::GameInstance::GetInstance() == nullptr,
+          "Destroying the active GameInstance did not clear the singleton.");
+
+  ObjectRef<Entity> sharedReference;
+  gameInstanceComponentDestructionOrder.clear();
+  {
+    Engine::GameInstance first;
+    Require(first.GetWorld() == first.GetWorld(),
+            "GameInstance returned more than one World.");
+    ConfigureTestWorld(*first.GetWorld());
+    sharedReference = first.GetWorld()->Spawn(TestEntity, "FirstWorldEntity");
+    first.GetWorld()->FlushSpawns();
+    sharedReference.Resolve()->transform.position.x = 10.0f;
+    first.AddComponent<FirstInstanceComponent>();
+    first.AddComponent<SecondInstanceComponent>();
+    const Engine::GameInstance &constFirst = first;
+    Require(constFirst.GetComponent<FirstInstanceComponent>() != nullptr,
+            "Const GameInstanceComponent lookup failed.");
+
+    {
+      Engine::GameInstance second;
+      ConfigureTestWorld(*second.GetWorld());
+      const ObjectRef<Entity> secondReference =
+          second.GetWorld()->Spawn(TestEntity, "SecondWorldEntity");
+      second.GetWorld()->FlushSpawns();
+      secondReference.Resolve()->transform.position.x = 20.0f;
+      Require(secondReference.GetID() == sharedReference.GetID() &&
+                  sharedReference.Resolve()->transform.position.x == 20.0f,
+              "ObjectRef did not resolve through the newest active manager.");
+
+      first.Activate();
+      Require(sharedReference.Resolve()->transform.position.x == 10.0f,
+              "ObjectRef did not follow explicit GameInstance activation.");
+    }
+
+    Require(Engine::GameInstance::GetInstance() == &first &&
+                sharedReference.Resolve()->transform.position.x == 10.0f,
+            "Destroying an inactive instance disturbed the reactivated one.");
+  }
+
+  Require(Engine::GameInstance::GetInstance() == nullptr &&
+              sharedReference.Resolve() == nullptr,
+          "ObjectRef resolved without an active GameInstance.");
+  Require(gameInstanceComponentDestructionOrder == std::vector<int>({2, 1}),
+          "GameInstanceComponents were not destroyed in reverse order.");
 }
 } // namespace
 
@@ -161,78 +245,111 @@ int main() {
                     .liveAllocations == 0,
             "STL allocator did not return vector storage to its bucket.");
 
-    auto world = MakeTestWorld();
+    TestGameInstanceLifecycle();
+
+    Engine::GameInstance worldInstance;
+    Require(Engine::GameInstance::GetInstance() == &worldInstance &&
+                worldInstance.GetObjectManager() != nullptr &&
+                worldInstance.GetWorld() != nullptr,
+            "GameInstance did not expose its active ObjectManager and World.");
+    auto *instanceComponent =
+        worldInstance.AddComponent<TestGameInstanceComponent>(42);
+    Require(instanceComponent != nullptr && instanceComponent->value == 42 &&
+                worldInstance.GetComponent<TestGameInstanceComponent>() ==
+                    instanceComponent,
+            "GameInstanceComponent registration or lookup failed.");
+    RequireThrows(
+        [&] { worldInstance.AddComponent<TestGameInstanceComponent>(7); },
+        "Duplicate GameInstanceComponent TypeID was accepted.");
+    auto &world = *worldInstance.GetWorld();
+    ConfigureTestWorld(world);
     const auto pending = world.Spawn(TestEntity, "Alpha");
-    Require(pending.Resolve(world.Objects()) == nullptr,
+    Require(pending.Resolve() == nullptr,
             "Deferred spawn resolved during its request frame.");
     world.FlushSpawns();
-    auto *entity = pending.Resolve(world.Objects());
+    auto *entity = pending.Resolve();
     Require(entity != nullptr && entity->components.size() == 2,
             "EntityFactory did not create the declared component layout.");
-    Require(world.Objects().GetDebugName(entity->components[0]) ==
+    Require(world.Objects().GetDebugName(entity->components[0].GetID()) ==
                 "Alpha+Second",
             "Component debug naming convention failed.");
+    Require(entity->GetComponent<TestComponent>().IsAssigned(),
+            "Entity typed component lookup failed.");
     updateOrder.clear();
     world.Update(0.016f);
     Require(updateOrder == std::vector<int>({1, 2}),
             "Components were not updated in registered type order.");
-    const auto oldComponent = ObjectRef<Component>(entity->components[0]);
+    const auto oldComponent = entity->components[0];
     constexpr TypeID componentStorage = ObjectStorageTypeID<TestComponent>();
     const auto componentMemoryID = GetObjectAllocationInfo(
         componentStorage,
-        world.Objects().GetAs<Component>(entity->components[1]));
+        world.Objects().GetAs<Component>(entity->components[1].GetID()));
     const auto snapshot = world.Save();
-    auto restored = MakeTestWorld();
+    Engine::GameInstance restoredInstance;
+    auto &restored = *restoredInstance.GetWorld();
+    ConfigureTestWorld(restored);
     restored.Resume(snapshot);
+    Require(
+        pending.Resolve() != nullptr,
+        "ObjectRef did not resolve through the active restored GameInstance.");
     Require(restored.Save() == snapshot,
             "World snapshot did not round-trip byte-for-byte.");
-    auto replacementWorld = MakeReplacementWorld();
+    Engine::GameInstance replacementInstance;
+    auto &replacementWorld = *replacementInstance.GetWorld();
+    ConfigureReplacementWorld(replacementWorld);
     replacementWorld.Resume(snapshot);
     Require(replacementWorld.Entities().empty() &&
-                replacementWorld.Objects().Get(pending.GetID()) == nullptr,
+                replacementWorld.Objects().GetObject(pending.GetID()) ==
+                    nullptr,
             "A replaced EntityType was incorrectly restored.");
     const auto freshReplacement = replacementWorld.Spawn(
         StableTypeID("Tests.ReplacementEntity"), "Fresh");
     replacementWorld.FlushSpawns();
-    Require(freshReplacement.Resolve(replacementWorld.Objects()) != nullptr &&
-                replacementWorld.Objects().Get(pending.GetID()) == nullptr,
+    Require(freshReplacement.Resolve() != nullptr &&
+                replacementWorld.Objects().GetObject(pending.GetID()) ==
+                    nullptr,
             "Rejected ObjectIDs were not generation-invalidated before "
             "replacement spawning.");
     auto truncated = snapshot;
     truncated.pop_back();
     RequireThrows(
         [&] {
-          auto invalid = MakeTestWorld();
+          Engine::GameInstance invalidInstance;
+          auto &invalid = *invalidInstance.GetWorld();
+          ConfigureTestWorld(invalid);
           invalid.Resume(truncated);
         },
         "Truncated snapshot was accepted.");
+    replacementInstance.Activate();
     auto badMagic = snapshot;
     badMagic.front() ^= std::byte{0xff};
     RequireThrows(
         [&] {
-          auto invalid = MakeTestWorld();
+          Engine::GameInstance invalidInstance;
+          auto &invalid = *invalidInstance.GetWorld();
+          ConfigureTestWorld(invalid);
           invalid.Resume(badMagic);
         },
         "Unknown snapshot format was accepted.");
-    const auto restoredEntity =
-        ObjectRef<Entity>(pending.GetID()).Resolve(restored.Objects());
+    restoredInstance.Activate();
+    const auto restoredEntity = ObjectRef<Entity>(pending.GetID()).Resolve();
     Require(restoredEntity != nullptr &&
-                restoredEntity->components[0] == oldComponent.GetID(),
+                restoredEntity->components[0] == oldComponent,
             "ObjectIDs were not preserved on resume.");
+    worldInstance.Activate();
     world.Destroy(pending);
     world.FlushSpawns();
-    Require(pending.Resolve(world.Objects()) == nullptr &&
-                oldComponent.Resolve(world.Objects()) == nullptr,
+    Require(pending.Resolve() == nullptr && oldComponent.Resolve() == nullptr,
             "Destroyed ObjectRefs remained resolvable.");
     const auto replacement = world.Spawn(TestEntity, "Beta");
     world.FlushSpawns();
     Require(replacement.GetID().index == pending.GetID().index &&
                 replacement.GetID().version != pending.GetID().version,
             "Sparse ObjectID slot was not reused with a new version.");
-    const auto *replacementEntity = replacement.Resolve(world.Objects());
+    const auto *replacementEntity = replacement.Resolve();
     const auto replacementMemoryID = GetObjectAllocationInfo(
-        componentStorage,
-        world.Objects().GetAs<Component>(replacementEntity->components[0]));
+        componentStorage, world.Objects().GetAs<Component>(
+                              replacementEntity->components[0].GetID()));
     Require(replacementMemoryID.index == componentMemoryID.index &&
                 replacementMemoryID.version != componentMemoryID.version,
             "Dedicated Object pool did not recycle its sparse memory slot "

@@ -14,6 +14,7 @@ constexpr std::uint32_t Format = 1;
 
 class World::Impl {
 public:
+  explicit Impl(ObjectManager &objectManager) : objects(objectManager) {}
   struct SpawnRequest {
     ObjectID reserved;
     TypeID type;
@@ -22,7 +23,7 @@ public:
   void CreateEntity(ObjectID id, TypeID type, const std::string &requestedName,
                     const std::vector<ObjectID> *restored);
 
-  ObjectManager objects;
+  ObjectManager &objects;
   std::vector<ComponentType> componentTypes;
   std::unordered_map<TypeID, std::size_t> componentLookup;
   std::unordered_map<TypeID, EntityType> entityTypes;
@@ -32,7 +33,8 @@ public:
   std::vector<ObjectID> destroys;
 };
 
-World::World() : impl_(NEW_MEMORY(Impl).release()) {}
+World::World(ObjectManager &objects)
+    : impl_(NEW_MEMORY(Impl, objects).release()) {}
 World::~World() { DELETE_MEMORY(impl_); }
 World::World(World &&other) noexcept
     : impl_(std::exchange(other.impl_, nullptr)) {}
@@ -100,7 +102,7 @@ void World::Impl::CreateEntity(ObjectID id, TypeID type,
       objects.Restore(componentID, std::move(component));
     else
       objects.BindReserved(componentID, std::move(component));
-    entity->components.push_back(componentID);
+    entity->components.emplace_back(componentID);
     componentUpdatePools[componentType].push_back(componentID);
     objects.SetDebugName(componentID, name + "+" + descriptor.name);
   }
@@ -111,11 +113,11 @@ void World::FlushSpawns() {
     auto *entity = impl_->objects.GetAs<Entity>(id);
     if (!entity)
       continue;
-    for (ObjectID component : entity->components) {
+    for (ObjectRef<Component> component : entity->components) {
       for (auto &[type, pool] : impl_->componentUpdatePools)
-        pool.erase(std::remove(pool.begin(), pool.end(), component),
+        pool.erase(std::remove(pool.begin(), pool.end(), component.GetID()),
                    pool.end());
-      impl_->objects.Destroy(component);
+      impl_->objects.Destroy(component.GetID());
     }
     impl_->entities.erase(
         std::remove(impl_->entities.begin(), impl_->entities.end(), id),
@@ -133,7 +135,7 @@ void World::Update(float deltaTime) {
     const auto ids = impl_->componentUpdatePools.at(type.id);
     for (ObjectID id : ids)
       if (auto *component = impl_->objects.GetAs<Component>(id))
-        component->Update(impl_->objects, deltaTime);
+        component->Update(deltaTime);
   }
   FlushSpawns();
 }
@@ -150,7 +152,8 @@ std::vector<std::byte> World::Save() const {
     writer.String(entity->GetName());
     writer.Value(entity->transform);
     writer.Value(static_cast<std::uint32_t>(entity->components.size()));
-    for (ObjectID componentID : entity->components) {
+    for (ObjectRef<Component> componentRef : entity->components) {
+      const ObjectID componentID = componentRef.GetID();
       const auto *component = impl_->objects.GetAs<Component>(componentID);
       StateWriter payload;
       component->SaveState(payload);

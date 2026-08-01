@@ -110,10 +110,10 @@ void ObjectManager::Destroy(ObjectID id) {
     --impl_->liveCount;
 }
 
-Object *ObjectManager::Get(ObjectID id) {
-  return const_cast<Object *>(std::as_const(*this).Get(id));
+Object *ObjectManager::GetObject(ObjectID id) {
+  return const_cast<Object *>(std::as_const(*this).GetObject(id));
 }
-const Object *ObjectManager::Get(ObjectID id) const {
+const Object *ObjectManager::GetObject(ObjectID id) const {
   if (!id.IsValid() || id.index >= impl_->slots.size())
     return nullptr;
   const auto &slot = impl_->slots[id.index];
@@ -126,7 +126,7 @@ void ObjectManager::Clear() {
 }
 
 void ObjectManager::SetDebugName(ObjectID id, std::string name) {
-  if (!Get(id))
+  if (!GetObject(id))
     throw std::invalid_argument("Cannot name an unknown object.");
   impl_->names[id] = std::move(name);
 }

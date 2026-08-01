@@ -5,10 +5,43 @@ description: Implement or modify gameplay entities, components, spawning, refere
 
 # Gameplay resume architecture
 
+## Mental model
+
+Treat the world as resumable data operated on by replaceable code:
+
+- An `Entity` is an identity, a `Transform`, and an ordered collection of
+  `ObjectRef<Component>` values.
+- A `Component` owns one behavior and all persistent state for that behavior.
+- The active `GameInstance` owns the `ObjectManager` and its single `World`.
+- `ObjectRef::Resolve()` always uses the active `GameInstance`.
+- Component registration order is the global update order.
+- `ProceduralGame` translates input, coordinates frame-boundary requests, and
+  renders state. Do not turn it into a second monolithic gameplay object.
+
+Build gameplay by composing focused components. Prefer separate movement,
+weapon, health, lifetime, damage, spawning, and decision components over one
+class that implements an entire actor. Projectiles, directors, triggers, and
+other world concepts are entities too; do not keep them as anonymous arrays in
+the game class.
+
+Use this frame flow:
+
+1. Translate external input into commands and submit them to components.
+2. Call `World::Update`; components update by registered type order.
+3. Let components expose value-based spawn/destruction/action requests.
+4. Resolve collisions and consume requests in the game-level spawning handler.
+5. Apply `World::Spawn`/`World::Destroy` at the frame boundary, then configure
+   newly resolvable components after `FlushSpawns`.
+
+Components must not spawn or destroy entities themselves. Their parameterless
+`Update(float)` resolves relationships through `ObjectRef`; it does not receive
+the manager or ownership of the `World`. Store pending requests as state when
+they can exist at snapshot time so a reload cannot silently lose them.
+
 Preserve these invariants:
 
 1. Give every `Entity` and `Component` an `ObjectID { index, version }` through `World`/`ObjectManager`. Never manufacture IDs in gameplay.
-2. Store persistent relationships only as `ObjectRef<T>`. Never keep a pointer/reference to another gameplay object across frames. Resolve locally, use it, then discard the pointer.
+2. Store persistent relationships only as `ObjectRef<T>`. Never keep a pointer/reference to another gameplay object across frames. Call parameterless `Resolve()`, use the resulting pointer locally, then discard it. Resolution must flow through the active `GameInstance`; never pass an `ObjectManager` through gameplay APIs.
 3. Declare stable compile-time `TypeID`s with `StableTypeID("Game.Namespace.Type")`. Never derive them from registration order. Renaming the string deliberately breaks that type's saved state.
 4. Register component types in global update order. Declare each entity's component TypeID layout in its `EntityType`; spawn only through `World::Spawn`.
 5. Request spawn/destruction during gameplay and apply it at the frame boundary. A newly returned ref must remain unresolved until `FlushSpawns`.
@@ -20,11 +53,54 @@ Preserve these invariants:
 11. Use `NEW_MEMORY`/`DELETE_MEMORY` for other explicitly owned allocations. For STL storage that must use engine buckets, select `Engine::Memory::Allocator<T>` explicitly. Do not add process-global `operator new/delete` overrides across Engine/Game DLLs: initialization order can recurse before the Engine allocator registry exists.
 12. Classify every gameplay change before editing: **compatible** (same TypeIDs/schema), **migratable** (same TypeIDs with a versioned `LoadState` migration), or **replacement** (meaning/structure changed substantially). For a replacement, create new EntityType and ComponentType strings/TypeIDs. Never reuse the previous IDs merely to force old state into a fundamentally different design.
 13. Resume skips entities whose EntityType is absent or whose declared ComponentType layout changed. Their saved ObjectIDs are generation-invalidated so stale refs cannot resolve to replacements. Ensure the game factory spawns the new default entity when its predecessor was skipped. Other compatible entities must continue resuming normally.
+14. Keep component references on their owning `Entity`. Use parameterless
+    `entity.GetComponent<T>()` for typed access. Do not expose layout
+    indices in gameplay or rebuild component refs manually from raw ObjectIDs.
+    Component refs cached elsewhere are transient conveniences only and must be
+    reacquired after resume.
+15. Give each loaded game exactly one `GameInstance`. It owns exactly one
+    `ObjectManager` and one active `World`. Put future game-wide systems under
+    this root as `GameInstanceComponent`s, not in unrelated process globals.
+    Give each such component a stable TypeID and use `AddComponent<T>()` /
+    `GetComponent<T>()`. During hot reload, install the new instance before
+    resume; on failure reactivate the old instance before gameplay continues.
+16. Challenge requested API sketches before implementing them. Search for an
+    existing operation with identical semantics, retain one canonical name,
+    and migrate its callers. Do not create forwarding aliases solely to make
+    code resemble pseudocode from a request.
+
+## BaseGame reference
+
+Use `Games/BaseGame` as the concrete architecture example:
+
+- `ArenaDirectorEntity` + `ArenaDirector`: deterministic random enemy requests.
+- `PlayerEntity` + `PlayerMovement` + `PlayerWeapon` + `Health`.
+- `EnemyEntity` + `EnemyMovement` + `EnemyWeapon` + `Health`.
+- Player/enemy projectile entities + `ProjectileMovement` +
+  `ProjectileDamage`.
+
+Read `Games/BaseGame/Include/Game/GameplayComponents.h` for stable TypeIDs and
+component state boundaries. Read `Games/BaseGame/Source/GameplayComponents.cpp`
+for update/serialization patterns. Read `Games/BaseGame/Source/Game.cpp` for
+registration order, request consumption, collision handling, rendering, and
+resume-time reacquisition of core `ObjectRef`s. Read `Game.h` to see the game
+own its `GameInstance` and borrow that instance's single `World`.
+
+When adding a behavior, first decide whether it belongs in an existing focused
+component or needs a new ComponentType. When adding a world concept, create an
+EntityType with an explicit component layout. Never add a parallel unmanaged
+collection to `ProceduralGame` merely because it is convenient.
 
 ## Validation
 
 Run `cmake --build build --config Debug --target AutoTests`, then `ctest --test-dir build -C Debug --output-on-failure`.
 
-Test deferred resolution, update order, slot reuse/version invalidation, stale refs, exact ID preservation, all state fields, debug names, unsupported versions, malformed snapshots, and an actual DLL reload. Assert state equality before and after reload.
+Test deferred resolution, update order, slot reuse/version invalidation, stale refs, exact ID preservation, all state fields, debug names, unsupported versions, malformed snapshots, and an actual DLL reload. Also assert the gameplay outcome of each new component, such as spawned entity counts or projectile factions. Assert state equality before and after reload.
+
+For `GameInstance` changes, test newest-instance activation, explicit
+reactivation, inactive-instance destruction, clearing the active singleton,
+the single-World invariant, duplicate GameInstanceComponent TypeIDs, reverse
+component destruction order, and one pre-reload `ObjectRef` resolving the
+restored object through the renewed manager.
 
 Review persistent gameplay fields before finishing. Replace every object pointer with an `ObjectRef`, or prove the value is transient and cannot cross a frame/reload boundary.

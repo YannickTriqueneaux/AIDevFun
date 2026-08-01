@@ -22,6 +22,62 @@ GameHost loads the next generation without restarting the Engine or Assistant.
 Whenever possible, the Engine restores the running game so play can continue
 from where it was interrupted, even after the game code has changed.
 
+## Resumable gameplay architecture
+
+Each loaded game owns one master `GameInstance`. It is the active gameplay
+singleton and owns the `ObjectManager` plus exactly one active `World`. Other
+game-wide systems derive from `GameInstanceComponent` and are attached below
+this root with `AddComponent<T>()`. They use stable TypeIDs, are retrieved with
+`GetComponent<T>()`, and are renewed with their owning instance instead of
+becoming unrelated global singletons.
+
+Every gameplay object has a versioned `ObjectID`; persistent relationships use
+`ObjectRef` rather than C++ pointers. `ObjectRef::Resolve()` needs no manager
+argument: it resolves through
+`GameInstance::GetInstance()->GetObjectManager()`. An entity contains its
+transform and an ordered collection of `ObjectRef<Component>` values, while
+each component contains one behavior and the state required to resume that
+behavior. Gameplay uses parameterless `Entity::GetComponent<T>()` instead of
+depending on a component's layout index or reconstructing references from raw
+IDs.
+
+Hot reload constructs and activates a fresh `GameInstance` with the new game
+code before restoring the snapshot. The old and new DLL generations can briefly
+coexist, but only one instance is active. If loading or resume fails, the host
+reactivates the old instance. On success, existing ObjectIDs resolve against the
+restored manager in the new instance automatically.
+
+The component registration list defines update order across the world. This
+keeps related objects together and updates movement, weapons, projectiles, and
+other systems by component type rather than by walking one actor at a time.
+Components produce requests, while the game-level spawning handler applies
+entity creation and destruction at the frame boundary.
+
+BaseGame demonstrates the intended composition:
+
+| Entity | Components | Purpose |
+| --- | --- | --- |
+| Arena director | `ArenaDirector` | Produces deterministic random enemy spawn requests. |
+| Player | `PlayerMovement`, `PlayerWeapon`, `Health` | Separates input-driven movement, firing, and survivability. |
+| Enemy | `EnemyMovement`, `EnemyWeapon`, `Health` | Separates pursuit, firing, and survivability. |
+| Player projectile | `ProjectileMovement`, `ProjectileDamage` | Represents a player shot as a resumable world object. |
+| Enemy projectile | `ProjectileMovement`, `ProjectileDamage` | Represents an enemy shot as a resumable world object. |
+
+The per-frame sequence is:
+
+1. Convert input into component commands.
+2. Update all components in registered type order.
+3. Resolve collisions and consume component requests.
+4. Apply queued destruction and spawning at the frame boundary.
+5. Render the resulting world state.
+
+`Games/BaseGame/Include/Game/GameplayComponents.h` defines the stable TypeIDs
+and component boundaries. `Games/BaseGame/Source/GameplayComponents.cpp`
+implements state-driven behavior and serialization.
+`Games/BaseGame/Source/Game.cpp` is the reference for registration, orchestration,
+rendering, and rebuilding transient handles after resume. The mandatory rules
+for modifying this model live in `docs/skills/gameplay-resume/SKILL.md`.
+
 ## Embedded shaders
 
 Keep shaders as C++ raw strings in the game source so they can be created and

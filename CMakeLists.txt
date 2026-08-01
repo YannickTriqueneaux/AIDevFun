@@ -80,6 +80,7 @@ add_library(Engine SHARED
     Engine/Source/AssistantApplication.cpp
     Engine/Source/CrashDiagnostics.cpp
     Engine/Source/DynamicLibrary.cpp
+    Engine/Source/GameInstance.cpp
     Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
     Engine/Source/Logger.cpp
@@ -118,12 +119,13 @@ target_compile_definitions(
 target_compile_definitions(
     Engine PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
-add_library(Game SHARED
-    ${ACTIVE_GAME_DIR}/Source/GameModule.cpp
-    ${ACTIVE_GAME_DIR}/Source/Game.cpp
-    ${ACTIVE_GAME_DIR}/Source/GameInput.cpp
-    ${ACTIVE_GAME_DIR}/Source/Player.cpp
-)
+file(GLOB ACTIVE_GAME_SOURCES CONFIGURE_DEPENDS
+    "${ACTIVE_GAME_DIR}/Source/*.cpp")
+set(ACTIVE_GAME_RUNTIME_SOURCES ${ACTIVE_GAME_SOURCES})
+list(REMOVE_ITEM ACTIVE_GAME_RUNTIME_SOURCES
+    "${ACTIVE_GAME_DIR}/Source/GameModule.cpp")
+
+add_library(Game SHARED ${ACTIVE_GAME_SOURCES})
 
 target_include_directories(Game PRIVATE ${ACTIVE_GAME_DIR}/Include)
 target_link_libraries(Game PRIVATE Engine)
@@ -163,6 +165,7 @@ add_executable(GameRelease WIN32
     GameHost/Source/ReleaseMain.cpp
     Engine/Source/Application.cpp
     Engine/Source/CrashDiagnostics.cpp
+    Engine/Source/GameInstance.cpp
     Engine/Source/InputSystem.cpp
     Engine/Source/Memory.cpp
     Engine/Source/ObjectManager.cpp
@@ -174,9 +177,7 @@ add_executable(GameRelease WIN32
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
     Engine/Source/World.cpp
-    ${ACTIVE_GAME_DIR}/Source/Game.cpp
-    ${ACTIVE_GAME_DIR}/Source/GameInput.cpp
-    ${ACTIVE_GAME_DIR}/Source/Player.cpp
+    ${ACTIVE_GAME_RUNTIME_SOURCES}
 )
 target_include_directories(GameRelease PRIVATE
     Engine/Include
@@ -215,7 +216,7 @@ if(BUILD_TESTING)
         Games/BaseGame/Source/GameModule.cpp
         Games/BaseGame/Source/Game.cpp
         Games/BaseGame/Source/GameInput.cpp
-        Games/BaseGame/Source/Player.cpp
+        Games/BaseGame/Source/GameplayComponents.cpp
     )
     target_include_directories(BaseGameTestModule PRIVATE Games/BaseGame/Include)
     target_link_libraries(BaseGameTestModule PRIVATE Engine)

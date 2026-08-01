@@ -7,7 +7,7 @@ namespace GameConfig {
 inline constexpr int PlayAreaWidth = 1280;
 inline constexpr int PlayAreaHeight = 720;
 inline constexpr int TargetFramesPerSecond = 144;
-inline constexpr const char *WindowTitle = "Procedural Raylib Game";
+inline constexpr const char *WindowTitle = "Entity Arena";
 
 inline Engine::GameApplicationConfig CreateApplicationConfig() {
   return {.windowWidth = PlayAreaWidth,

@@ -6,6 +6,7 @@
 #include <vector>
 namespace Engine::Gameplay {
 class ObjectManager;
+class Component;
 class Object {
 public:
   virtual ~Object() = default;
@@ -23,8 +24,7 @@ public:
   explicit ObjectRef(const Object &object) : id_(object.GetObjectID()) {}
   [[nodiscard]] ObjectID GetID() const { return id_; }
   [[nodiscard]] bool IsAssigned() const { return id_.IsValid(); }
-  [[nodiscard]] T *Resolve(ObjectManager &manager) const;
-  [[nodiscard]] const T *Resolve(const ObjectManager &manager) const;
+  [[nodiscard]] T *Resolve() const;
   auto operator<=>(const ObjectRef &) const = default;
 
 private:
@@ -41,8 +41,9 @@ public:
       : typeID_(typeID), name_(std::move(name)) {}
   [[nodiscard]] TypeID GetTypeID() const override { return typeID_; }
   [[nodiscard]] const std::string &GetName() const { return name_; }
+  template <class T> [[nodiscard]] ObjectRef<T> GetComponent() const;
   Transform transform;
-  std::vector<ObjectID> components;
+  std::vector<ObjectRef<Component>> components;
 
 private:
   TypeID typeID_;
@@ -51,7 +52,7 @@ private:
 class Component : public Object {
 public:
   explicit Component(ObjectRef<Entity> owner) : owner_(owner) {}
-  virtual void Update(ObjectManager &, float) {}
+  virtual void Update(float) {}
   [[nodiscard]] ObjectRef<Entity> GetOwner() const { return owner_; }
   [[nodiscard]] virtual std::uint32_t CurrentStateVersion() const = 0;
   [[nodiscard]] virtual std::uint32_t MinimumStateVersion() const = 0;

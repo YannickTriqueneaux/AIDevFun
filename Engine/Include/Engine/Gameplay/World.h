@@ -22,7 +22,7 @@ struct EntityType {
 
 class ENGINE_API World {
 public:
-  World();
+  explicit World(ObjectManager &objects);
   ~World();
   World(const World &) = delete;
   World &operator=(const World &) = delete;

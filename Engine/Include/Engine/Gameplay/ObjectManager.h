@@ -7,6 +7,8 @@
 #include <string>
 
 namespace Engine::Gameplay {
+ENGINE_API ObjectManager *GetActiveObjectManager();
+
 class ENGINE_API ObjectManager {
 public:
   ObjectManager();
@@ -24,13 +26,13 @@ public:
   void Destroy(ObjectID id);
   void Clear();
 
-  [[nodiscard]] Object *Get(ObjectID id);
-  [[nodiscard]] const Object *Get(ObjectID id) const;
+  [[nodiscard]] Object *GetObject(ObjectID id);
+  [[nodiscard]] const Object *GetObject(ObjectID id) const;
   template <class T> [[nodiscard]] T *GetAs(ObjectID id) {
-    return dynamic_cast<T *>(Get(id));
+    return dynamic_cast<T *>(GetObject(id));
   }
   template <class T> [[nodiscard]] const T *GetAs(ObjectID id) const {
-    return dynamic_cast<const T *>(Get(id));
+    return dynamic_cast<const T *>(GetObject(id));
   }
 
   void SetDebugName(ObjectID id, std::string name);
@@ -42,11 +44,19 @@ private:
   Impl *impl_ = nullptr;
 };
 
-template <class T> T *ObjectRef<T>::Resolve(ObjectManager &manager) const {
-  return manager.GetAs<T>(id_);
+template <class T> T *ObjectRef<T>::Resolve() const {
+  ObjectManager *manager = GetActiveObjectManager();
+  return manager ? dynamic_cast<T *>(manager->GetObject(id_)) : nullptr;
 }
-template <class T>
-const T *ObjectRef<T>::Resolve(const ObjectManager &manager) const {
-  return manager.GetAs<T>(id_);
+
+template <class T> ObjectRef<T> Entity::GetComponent() const {
+  ObjectManager *manager = GetActiveObjectManager();
+  if (!manager)
+    return {};
+  for (const ObjectRef<Component> component : components) {
+    if (manager->GetAs<T>(component.GetID()))
+      return ObjectRef<T>(component.GetID());
+  }
+  return {};
 }
 } // namespace Engine::Gameplay

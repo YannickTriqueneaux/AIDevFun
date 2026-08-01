@@ -6,31 +6,341 @@
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Serialization/Serializer.h"
 
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+
 namespace {
-constexpr auto PlayerEntityType =
-    Engine::Gameplay::StableTypeID("BaseGame.PlayerEntity");
+using Entity = Engine::Gameplay::Entity;
+using ObjectID = Engine::Gameplay::ObjectID;
+using ObjectRef = Engine::Gameplay::ObjectRef<Entity>;
+using TypeID = Engine::Gameplay::TypeID;
+
+constexpr float PlayerRadius = 12.0f;
+constexpr float EnemyRadius = 17.0f;
+constexpr float ProjectileRadius = 4.0f;
+constexpr std::size_t MaximumEnemies = 18;
+
+float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
+  const float x = left.x - right.x;
+  const float y = left.y - right.y;
+  return x * x + y * y;
 }
 
-ProceduralGame::ProceduralGame() {
+void DrawGrid(Engine::Renderer2D &renderer) {
+  for (int x = 0; x < renderer.GetWidth(); x += GameConfig::GridSize) {
+    renderer.DrawLine(
+        {static_cast<float>(x), 0.0f},
+        {static_cast<float>(x), static_cast<float>(renderer.GetHeight())}, 1.0f,
+        GameConfig::GridColor);
+  }
+  for (int y = 0; y < renderer.GetHeight(); y += GameConfig::GridSize) {
+    renderer.DrawLine(
+        {0.0f, static_cast<float>(y)},
+        {static_cast<float>(renderer.GetWidth()), static_cast<float>(y)}, 1.0f,
+        GameConfig::GridColor);
+  }
+}
+
+int MaxHealthForFaction(BaseGame::Faction faction) {
+  return faction == BaseGame::Faction::Player ? 8 : 3;
+}
+
+float HealthRatio(const BaseGame::Health *health) {
+  if (!health)
+    return 0.0f;
+  const int maxHealth = MaxHealthForFaction(health->GetFaction());
+  if (maxHealth <= 0)
+    return 0.0f;
+  return std::clamp(static_cast<float>(health->HitPoints()) /
+                        static_cast<float>(maxHealth),
+                    0.0f, 1.0f);
+}
+
+Engine::Color HealthColor(float ratio) {
+  ratio = std::clamp(ratio, 0.0f, 1.0f);
+  if (ratio > 0.5f) {
+    const float t = (ratio - 0.5f) * 2.0f;
+    return {static_cast<std::uint8_t>(255.0f * (1.0f - t) + 74.0f * t),
+            static_cast<std::uint8_t>(203.0f * (1.0f - t) + 222.0f * t),
+            static_cast<std::uint8_t>(0.0f * (1.0f - t) + 92.0f * t), 255};
+  }
+  const float t = ratio * 2.0f;
+  return {255, static_cast<std::uint8_t>(78.0f * (1.0f - t) + 203.0f * t),
+          static_cast<std::uint8_t>(92.0f * (1.0f - t)), 255};
+}
+
+void DrawHealthBar(Engine::Renderer2D &renderer, Engine::Vector2 center,
+                   float width, float height, float ratio) {
+  ratio = std::clamp(ratio, 0.0f, 1.0f);
+  const Engine::Vector2 start{center.x - width * 0.5f, center.y};
+  const Engine::Vector2 end{center.x + width * 0.5f, center.y};
+  renderer.DrawLine(start, end, height + 4.0f, {25, 25, 32, 220});
+  renderer.DrawLine(start, end, height, {74, 74, 86, 255});
+  if (ratio > 0.0f) {
+    const Engine::Vector2 fillEnd{start.x + width * ratio, center.y};
+    renderer.DrawLine(start, fillEnd, height, HealthColor(ratio));
+  }
+}
+} // namespace
+
+ProceduralGame::ProceduralGame() : world_(*gameInstance_.GetWorld()) {
+  RegisterGameplayTypes();
+  EnsureCoreEntities();
+}
+
+void ProceduralGame::RegisterGameplayTypes() {
   world_.RegisterComponent(
-      {Player::Type, "Player",
-       [](Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> owner) {
-         return NEW_OBJECT(Player, owner);
+      {BaseGame::ArenaDirector::Type, "ArenaDirector", [](ObjectRef owner) {
+         return NEW_OBJECT(BaseGame::ArenaDirector, owner);
        }});
-  world_.RegisterEntity({PlayerEntityType, "PlayerEntity", {Player::Type}});
-  playerEntity_ = world_.Spawn(PlayerEntityType, "Player");
-  world_.FlushSpawns();
-  auto *entity = playerEntity_.Resolve(world_.Objects());
-  entity->transform.position = {
-      static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
-      static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
-  player_ = Engine::Gameplay::ObjectRef<Player>(entity->components.front());
+  world_.RegisterComponent(
+      {BaseGame::PlayerMovement::Type, "PlayerMovement", [](ObjectRef owner) {
+         return NEW_OBJECT(BaseGame::PlayerMovement, owner);
+       }});
+  world_.RegisterComponent(
+      {BaseGame::EnemyMovement::Type, "EnemyMovement", [](ObjectRef owner) {
+         return NEW_OBJECT(BaseGame::EnemyMovement, owner);
+       }});
+  world_.RegisterComponent(
+      {BaseGame::PlayerWeapon::Type, "PlayerWeapon", [](ObjectRef owner) {
+         return NEW_OBJECT(BaseGame::PlayerWeapon, owner);
+       }});
+  world_.RegisterComponent(
+      {BaseGame::EnemyWeapon::Type, "EnemyWeapon", [](ObjectRef owner) {
+         return NEW_OBJECT(BaseGame::EnemyWeapon, owner);
+       }});
+  world_.RegisterComponent({BaseGame::ProjectileMovement::Type,
+                            "ProjectileMovement", [](ObjectRef owner) {
+                              return NEW_OBJECT(BaseGame::ProjectileMovement,
+                                                owner);
+                            }});
+  world_.RegisterComponent(
+      {BaseGame::Health::Type, "Health",
+       [](ObjectRef owner) { return NEW_OBJECT(BaseGame::Health, owner); }});
+  world_.RegisterComponent({BaseGame::ProjectileDamage::Type,
+                            "ProjectileDamage", [](ObjectRef owner) {
+                              return NEW_OBJECT(BaseGame::ProjectileDamage,
+                                                owner);
+                            }});
+
+  world_.RegisterEntity({BaseGame::ArenaDirectorEntityType,
+                         "ArenaDirector",
+                         {BaseGame::ArenaDirector::Type}});
+  world_.RegisterEntity(
+      {BaseGame::PlayerEntityType,
+       "Player",
+       {BaseGame::PlayerMovement::Type, BaseGame::PlayerWeapon::Type,
+        BaseGame::Health::Type}});
+  world_.RegisterEntity(
+      {BaseGame::EnemyEntityType,
+       "Enemy",
+       {BaseGame::EnemyMovement::Type, BaseGame::EnemyWeapon::Type,
+        BaseGame::Health::Type}});
+  const std::vector<TypeID> projectileComponents{
+      BaseGame::ProjectileMovement::Type, BaseGame::ProjectileDamage::Type};
+  world_.RegisterEntity({BaseGame::PlayerProjectileEntityType,
+                         "PlayerProjectile", projectileComponents});
+  world_.RegisterEntity({BaseGame::EnemyProjectileEntityType, "EnemyProjectile",
+                         projectileComponents});
+}
+
+void ProceduralGame::EnsureCoreEntities() {
+  Entity *player = nullptr;
+  for (const ObjectID id : world_.Entities()) {
+    auto *entity = ObjectRef(id).Resolve();
+    if (!entity)
+      continue;
+    if (entity->GetTypeID() == BaseGame::PlayerEntityType) {
+      player = entity;
+      playerEntity_ = ObjectRef(id);
+    } else if (entity->GetTypeID() == BaseGame::ArenaDirectorEntityType) {
+      arenaDirector_ = entity->GetComponent<BaseGame::ArenaDirector>();
+    }
+  }
+
+  if (!arenaDirector_.Resolve()) {
+    const ObjectRef director =
+        world_.Spawn(BaseGame::ArenaDirectorEntityType, "ArenaDirector");
+    world_.FlushSpawns();
+    Entity *entity = director.Resolve();
+    arenaDirector_ = entity->GetComponent<BaseGame::ArenaDirector>();
+  }
+
+  if (!player) {
+    playerEntity_ = world_.Spawn(BaseGame::PlayerEntityType, "Player");
+    world_.FlushSpawns();
+    player = playerEntity_.Resolve();
+    player->transform.position = {
+        static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
+        static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
+    player->GetComponent<BaseGame::Health>().Resolve()->Configure(
+        BaseGame::Faction::Player, 8);
+  }
+
+  playerMovement_ = player->GetComponent<BaseGame::PlayerMovement>();
+  playerWeapon_ = player->GetComponent<BaseGame::PlayerWeapon>();
+  playerHealth_ = player->GetComponent<BaseGame::Health>();
 }
 
 void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
-  if (auto *player = player_.Resolve(world_.Objects()))
-    player->SetCommand(inputBindings_.BuildPlayerCommand(input));
+  const PlayerCommand command = inputBindings_.BuildPlayerCommand(input);
+  auto *movement = playerMovement_.Resolve();
+  auto *weapon = playerWeapon_.Resolve();
+  if (movement)
+    movement->SetCommand(command);
+  if (weapon && movement) {
+    const Engine::Vector2 aim =
+        (command.movement.x != 0.0f || command.movement.y != 0.0f)
+            ? command.movement
+            : movement->Facing();
+    weapon->SetTrigger(command.firing, aim);
+  }
+
   world_.Update(deltaTime);
+  ProcessCollisionsAndLifetime();
+  ProcessFrameRequests();
+}
+
+ObjectRef ProceduralGame::SpawnEnemy(Engine::Vector2 position) {
+  const ObjectRef enemy = world_.Spawn(
+      BaseGame::EnemyEntityType,
+      "Enemy#" + std::to_string(gameInstance_.GetObjectManager()->LiveCount()));
+  world_.FlushSpawns();
+  auto *entity = enemy.Resolve();
+  entity->transform.position = position;
+  entity->GetComponent<BaseGame::EnemyMovement>().Resolve()->SetTarget(
+      playerEntity_);
+  entity->GetComponent<BaseGame::EnemyWeapon>().Resolve()->SetTarget(
+      playerEntity_);
+  entity->GetComponent<BaseGame::Health>().Resolve()->Configure(
+      BaseGame::Faction::Enemy, 3);
+  return enemy;
+}
+
+ObjectRef ProceduralGame::SpawnProjectile(TypeID type, Engine::Vector2 position,
+                                          Engine::Vector2 direction,
+                                          BaseGame::Faction faction) {
+  const ObjectRef projectile = world_.Spawn(
+      type,
+      (faction == BaseGame::Faction::Player ? "PlayerShot#" : "EnemyShot#") +
+          std::to_string(gameInstance_.GetObjectManager()->LiveCount()));
+  world_.FlushSpawns();
+  auto *entity = projectile.Resolve();
+  entity->transform.position = position;
+  const float speed = faction == BaseGame::Faction::Player ? 560.0f : 310.0f;
+  entity->GetComponent<BaseGame::ProjectileMovement>().Resolve()->Configure(
+      direction * speed, 3.0f);
+  entity->GetComponent<BaseGame::ProjectileDamage>().Resolve()->Configure(
+      faction, 1);
+  return projectile;
+}
+
+void ProceduralGame::ProcessFrameRequests() {
+  std::size_t enemyCount = 0;
+  for (const ObjectID id : world_.Entities()) {
+    const auto *entity = ObjectRef(id).Resolve();
+    if (entity && entity->GetTypeID() == BaseGame::EnemyEntityType)
+      ++enemyCount;
+  }
+
+  Engine::Vector2 spawnPosition;
+  if (auto *director = arenaDirector_.Resolve();
+      director && enemyCount < MaximumEnemies &&
+      director->ConsumeEnemySpawn(spawnPosition)) {
+    (void)SpawnEnemy(spawnPosition);
+  }
+
+  if (auto *weapon = playerWeapon_.Resolve()) {
+    Engine::Vector2 direction;
+    if (weapon->ConsumeShot(direction)) {
+      const auto *player = playerEntity_.Resolve();
+      (void)SpawnProjectile(BaseGame::PlayerProjectileEntityType,
+                            player->transform.position + direction * 17.0f,
+                            direction, BaseGame::Faction::Player);
+    }
+  }
+
+  const auto entityIDs = world_.Entities();
+  for (const ObjectID id : entityIDs) {
+    auto *entity = ObjectRef(id).Resolve();
+    if (!entity || entity->GetTypeID() != BaseGame::EnemyEntityType)
+      continue;
+    auto *weapon = entity->GetComponent<BaseGame::EnemyWeapon>().Resolve();
+    Engine::Vector2 direction;
+    if (weapon && weapon->ConsumeShot(direction)) {
+      (void)SpawnProjectile(BaseGame::EnemyProjectileEntityType,
+                            entity->transform.position + direction * 22.0f,
+                            direction, BaseGame::Faction::Enemy);
+    }
+  }
+}
+
+void ProceduralGame::ProcessCollisionsAndLifetime() {
+  struct Target {
+    ObjectRef entity;
+    BaseGame::Health *health;
+    float radius;
+  };
+  std::vector<Target> targets;
+  std::vector<ObjectRef> projectiles;
+  for (const ObjectID id : world_.Entities()) {
+    auto *entity = ObjectRef(id).Resolve();
+    if (!entity)
+      continue;
+    if (entity->GetTypeID() == BaseGame::PlayerEntityType ||
+        entity->GetTypeID() == BaseGame::EnemyEntityType) {
+      targets.push_back(
+          {ObjectRef(id), entity->GetComponent<BaseGame::Health>().Resolve(),
+           entity->GetTypeID() == BaseGame::PlayerEntityType ? PlayerRadius
+                                                             : EnemyRadius});
+    } else if (entity->GetTypeID() == BaseGame::PlayerProjectileEntityType ||
+               entity->GetTypeID() == BaseGame::EnemyProjectileEntityType) {
+      projectiles.emplace_back(id);
+    }
+  }
+
+  for (const ObjectRef projectileRef : projectiles) {
+    auto *projectile = projectileRef.Resolve();
+    if (!projectile)
+      continue;
+    auto *movement =
+        projectile->GetComponent<BaseGame::ProjectileMovement>().Resolve();
+    auto *damage =
+        projectile->GetComponent<BaseGame::ProjectileDamage>().Resolve();
+    bool destroyProjectile = movement->IsExpired();
+    for (Target &target : targets) {
+      auto *targetEntity = target.entity.Resolve();
+      if (destroyProjectile || !targetEntity || !target.health ||
+          target.health->GetFaction() == damage->GetFaction())
+        continue;
+      const float hitRadius = target.radius + ProjectileRadius;
+      if (DistanceSquared(projectile->transform.position,
+                          targetEntity->transform.position) <=
+          hitRadius * hitRadius) {
+        target.health->Damage(damage->DamageAmount());
+        destroyProjectile = true;
+      }
+    }
+    if (destroyProjectile)
+      world_.Destroy(projectileRef);
+  }
+
+  for (Target &target : targets) {
+    if (!target.health || !target.health->IsDead())
+      continue;
+    auto *entity = target.entity.Resolve();
+    if (entity && entity->GetTypeID() == BaseGame::PlayerEntityType) {
+      entity->transform.position = {
+          static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
+          static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
+      target.health->Configure(BaseGame::Faction::Player, 8);
+    } else {
+      world_.Destroy(target.entity);
+    }
+  }
+  world_.FlushSpawns();
 }
 
 Engine::Color ProceduralGame::GetClearColor() const {
@@ -39,24 +349,54 @@ Engine::Color ProceduralGame::GetClearColor() const {
 
 void ProceduralGame::Render(Engine::RenderContext &context) const {
   Engine::Renderer2D &renderer = context.Draw2D();
-  for (int x = 0; x < renderer.GetWidth(); x += GameConfig::GridSize) {
-    renderer.DrawLine(
-        {static_cast<float>(x), 0.0f},
-        {static_cast<float>(x), static_cast<float>(renderer.GetHeight())}, 1.0f,
-        GameConfig::GridColor);
+  DrawGrid(renderer);
+
+  std::size_t enemies = 0;
+  for (const ObjectID id : world_.Entities()) {
+    const auto *entity = ObjectRef(id).Resolve();
+    if (!entity)
+      continue;
+    const TypeID type = entity->GetTypeID();
+    if (type == BaseGame::PlayerEntityType) {
+      renderer.DrawCircle(entity->transform.position, PlayerRadius,
+                          {74, 222, 156, 255});
+      if (const auto *movement =
+              entity->GetComponent<BaseGame::PlayerMovement>().Resolve())
+        renderer.DrawLine(entity->transform.position,
+                          entity->transform.position +
+                              movement->Facing() * 22.0f,
+                          3.0f, {245, 245, 245, 255});
+      DrawHealthBar(
+          renderer,
+          {entity->transform.position.x,
+           entity->transform.position.y - PlayerRadius - 10.0f},
+          42.0f, 5.0f,
+          HealthRatio(entity->GetComponent<BaseGame::Health>().Resolve()));
+    } else if (type == BaseGame::EnemyEntityType) {
+      ++enemies;
+      const auto *health = entity->GetComponent<BaseGame::Health>().Resolve();
+      const float healthRatio = HealthRatio(health);
+      renderer.DrawCircle(entity->transform.position, EnemyRadius,
+                          HealthColor(healthRatio));
+      renderer.DrawCircleOutline(entity->transform.position, EnemyRadius + 2.0f,
+                                 healthRatio > 0.5f
+                                     ? Engine::Color{190, 255, 140, 255}
+                                     : Engine::Color{255, 145, 85, 255});
+    } else if (type == BaseGame::PlayerProjectileEntityType) {
+      renderer.DrawCircle(entity->transform.position, ProjectileRadius,
+                          {255, 223, 92, 255});
+    } else if (type == BaseGame::EnemyProjectileEntityType) {
+      renderer.DrawCircle(entity->transform.position, ProjectileRadius,
+                          {255, 105, 180, 255});
+    }
   }
 
-  for (int y = 0; y < renderer.GetHeight(); y += GameConfig::GridSize) {
-    renderer.DrawLine(
-        {0.0f, static_cast<float>(y)},
-        {static_cast<float>(renderer.GetWidth()), static_cast<float>(y)}, 1.0f,
-        GameConfig::GridColor);
-  }
-
-  if (const auto *player = player_.Resolve(world_.Objects())) {
-    player->Render(renderer, world_.Objects());
-    player->RenderHud(renderer);
-  }
+  const auto *health = playerHealth_.Resolve();
+  renderer.DrawText("ARROWS: MOVE   HOLD W: FIRE", {24.0f, 22.0f}, 20,
+                    {220, 220, 225, 255});
+  renderer.DrawText("HP: " + std::to_string(health ? health->HitPoints() : 0) +
+                        "   ENEMIES: " + std::to_string(enemies),
+                    {24.0f, 50.0f}, 20, {255, 203, 0, 255});
 #if !defined(GAME_RELEASE_BUILD)
   renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
 #endif
@@ -65,43 +405,49 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
 std::vector<std::byte> ProceduralGame::SaveResumeState() const {
   return world_.Save();
 }
+
 void ProceduralGame::ResumeFromState(std::span<const std::byte> state) {
   world_.Resume(state);
-  Engine::Gameplay::Entity *playerEntity = nullptr;
-  for (const auto id : world_.Entities()) {
-    auto *candidate = world_.Objects().GetAs<Engine::Gameplay::Entity>(id);
-    if (candidate != nullptr && candidate->GetTypeID() == PlayerEntityType) {
-      playerEntity = candidate;
-      playerEntity_ = Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity>(id);
-      break;
-    }
-  }
-  if (playerEntity == nullptr) {
-    playerEntity_ = world_.Spawn(PlayerEntityType, "Player");
-    world_.FlushSpawns();
-    playerEntity = playerEntity_.Resolve(world_.Objects());
-    playerEntity->transform.position = {
-        static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
-        static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
-  }
-  player_ =
-      Engine::Gameplay::ObjectRef<Player>(playerEntity->components.front());
+  playerEntity_ = {};
+  playerMovement_ = {};
+  playerWeapon_ = {};
+  playerHealth_ = {};
+  arenaDirector_ = {};
+  EnsureCoreEntities();
 }
 
 #if defined(ENGINE_AUTOTESTS)
 void ProceduralGame::SerializeAutoTestState(Engine::Serializer &serializer) {
-  const auto *entity = playerEntity_.Resolve(world_.Objects());
-  const auto *player = player_.Resolve(world_.Objects());
-  float x = entity ? entity->transform.position.x : 0.0f;
-  float y = entity ? entity->transform.position.y : 0.0f;
+  const auto *player = playerEntity_.Resolve();
+  int enemies = 0;
+  int playerProjectiles = 0;
+  int enemyProjectiles = 0;
+  for (const ObjectID id : world_.Entities()) {
+    const auto *entity = ObjectRef(id).Resolve();
+    if (!entity)
+      continue;
+    enemies += entity->GetTypeID() == BaseGame::EnemyEntityType;
+    playerProjectiles +=
+        entity->GetTypeID() == BaseGame::PlayerProjectileEntityType;
+    enemyProjectiles +=
+        entity->GetTypeID() == BaseGame::EnemyProjectileEntityType;
+  }
+  float x = player ? player->transform.position.x : 0.0f;
+  float y = player ? player->transform.position.y : 0.0f;
   int entityIndex = static_cast<int>(playerEntity_.GetID().index);
   int entityVersion = static_cast<int>(playerEntity_.GetID().version);
-  int objectCount = static_cast<int>(world_.Objects().LiveCount());
+  int objectCount =
+      static_cast<int>(gameInstance_.GetObjectManager()->LiveCount());
+  int hitPoints =
+      playerHealth_.Resolve() ? playerHealth_.Resolve()->HitPoints() : 0;
   serializer.Value("player.position.x", x);
   serializer.Value("player.position.y", y);
   serializer.Value("player.entity.index", entityIndex);
   serializer.Value("player.entity.version", entityVersion);
+  serializer.Value("player.hitPoints", hitPoints);
+  serializer.Value("world.enemyCount", enemies);
+  serializer.Value("world.playerProjectileCount", playerProjectiles);
+  serializer.Value("world.enemyProjectileCount", enemyProjectiles);
   serializer.Value("world.objectCount", objectCount);
-  (void)player;
 }
 #endif

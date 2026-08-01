@@ -1,5 +1,6 @@
 #include "GameHost/ReloadableGame.h"
 
+#include "Engine/Application/GameInstance.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Input/Key.h"
 #include "Engine/Serialization/Serializer.h"
@@ -37,6 +38,23 @@ void Require(bool condition, const char *message) {
     throw std::runtime_error(message);
   }
 }
+
+int ReadInt(const RecordingSerializer &serializer, const char *name) {
+  const auto found = serializer.values.find(name);
+  if (found == serializer.values.end() ||
+      !std::holds_alternative<int>(found->second))
+    throw std::runtime_error(std::string("Missing integer state field: ") +
+                             name);
+  return std::get<int>(found->second);
+}
+
+float ReadFloat(const RecordingSerializer &serializer, const char *name) {
+  const auto found = serializer.values.find(name);
+  if (found == serializer.values.end() ||
+      !std::holds_alternative<float>(found->second))
+    throw std::runtime_error(std::string("Missing float state field: ") + name);
+  return std::get<float>(found->second);
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -52,6 +70,12 @@ int main(int argc, char **argv) {
 
     ReloadableGame game(std::filesystem::absolute(argv[1]),
                         std::filesystem::absolute(argv[2]));
+    Engine::GameInstance *firstInstance = Engine::GameInstance::GetInstance();
+    Require(firstInstance != nullptr,
+            "The loaded Game did not install a GameInstance singleton.");
+    Engine::Gameplay::ObjectManager *firstManager =
+        firstInstance->GetObjectManager();
+    Engine::Gameplay::World *firstWorld = firstInstance->GetWorld();
 
     RecordingSerializer before;
     game.SerializeAutoTestState(before);
@@ -60,18 +84,46 @@ int main(int argc, char **argv) {
     Engine::InputSystem input;
     input.EnableAutoTestInput();
     input.SetAutoTestKeyDown(Engine::Key::Right, true);
-    game.Update(input, 0.25f);
+    input.SetAutoTestKeyDown(Engine::Key::W, true);
+    for (int tick = 0; tick < 5; ++tick)
+      game.Update(input, 0.25f);
 
     RecordingSerializer afterTick;
     game.SerializeAutoTestState(afterTick);
     Require(afterTick.values != before.values,
             "A headless gameplay tick did not change entity state.");
+    Require(ReadInt(afterTick, "world.enemyCount") > 0,
+            "The arena director did not spawn an enemy entity.");
+    Require(ReadInt(afterTick, "world.playerProjectileCount") > 0,
+            "The player weapon did not spawn projectile entities.");
+    Require(ReadInt(afterTick, "world.enemyProjectileCount") > 0,
+            "Enemy weapons did not spawn projectile entities.");
+    const Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> playerRef(
+        {static_cast<std::uint32_t>(ReadInt(afterTick, "player.entity.index")),
+         static_cast<std::uint32_t>(
+             ReadInt(afterTick, "player.entity.version"))});
+    Require(playerRef.Resolve() != nullptr,
+            "Player ObjectRef did not resolve before hot reload.");
 
     game.RequestReload();
     game.ProcessAutoTestReload();
     Require(game.GetReloadStatus().find("Reloaded Game generation 2") !=
                 std::string::npos,
             "The second DLL generation was not loaded.");
+    Require(Engine::GameInstance::GetInstance() != nullptr &&
+                Engine::GameInstance::GetInstance() != firstInstance,
+            "Hot reload did not renew the active GameInstance singleton.");
+    Require(Engine::GameInstance::GetInstance()->GetObjectManager() !=
+                    firstManager &&
+                Engine::GameInstance::GetInstance()->GetWorld() != firstWorld,
+            "Hot reload reused the old ObjectManager or World.");
+    Require(playerRef.Resolve() != nullptr &&
+                playerRef.Resolve()->transform.position.x ==
+                    ReadFloat(afterTick, "player.position.x") &&
+                playerRef.Resolve()->transform.position.y ==
+                    ReadFloat(afterTick, "player.position.y"),
+            "A pre-reload ObjectRef did not resolve restored state in the new "
+            "GameInstance.");
 
     RecordingSerializer afterReload;
     game.SerializeAutoTestState(afterReload);
