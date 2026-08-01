@@ -70,6 +70,8 @@ if(ENGINE_PROFILE_ENABLED)
     endif()
     set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
     set(TRACY_STATIC OFF CACHE BOOL "" FORCE)
+    set(TRACY_DELAYED_INIT ON CACHE BOOL "" FORCE)
+    set(TRACY_MANUAL_LIFETIME ON CACHE BOOL "" FORCE)
     add_subdirectory(
         "${TRACY_SOURCE_DIR}"
         "${CMAKE_BINARY_DIR}/_deps/tracy-build"

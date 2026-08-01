@@ -144,6 +144,7 @@ if /I "%PROFILE_ENABLED%"=="ON" (
         echo Tracy Profiler not found: "!TRACY_PROFILER_PATH!"
         goto :failure
     )
+    powershell -NoProfile -Command "$profilerPath=[System.IO.Path]::GetFullPath($env:TRACY_PROFILER_PATH); Get-Process tracy-profiler -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $profilerPath } | Stop-Process -Force"
     start "" /D "!TRACY_PROFILER_BUILD!\Release" "!TRACY_PROFILER_PATH!" -a 127.0.0.1
 )
 start "" /D "%BUILD_DIR%\%CONFIGURATION%" "%LAUNCHER_PATH%"

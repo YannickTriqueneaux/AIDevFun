@@ -1,6 +1,7 @@
 #include "Engine/Application/Application.h"
 #include "Engine/Core/CrashDiagnostics.h"
 #include "Engine/Core/Logger.h"
+#include "Engine/Core/Profile.h"
 #include "GameHost/GameToolService.h"
 #include "GameHost/ReloadableGame.h"
 
@@ -22,6 +23,7 @@
 
 int main(int argc, char **argv) {
   try {
+    Engine::ProfileSession profileSession;
     const std::filesystem::path executableDirectory =
         std::filesystem::absolute(argc > 0 ? std::filesystem::path(argv[0])
                                            : std::filesystem::path{})
