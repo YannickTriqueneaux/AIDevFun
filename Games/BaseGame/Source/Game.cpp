@@ -2,9 +2,23 @@
 
 #include "Game/GameConfig.h"
 
+#include "Engine/Core/Profile.h"
 #include "Engine/Graphics/RenderContext.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Serialization/Serializer.h"
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#ifdef DrawText
+#undef DrawText
+#endif
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -20,7 +34,8 @@ using TypeID = Engine::Gameplay::TypeID;
 constexpr float PlayerRadius = 12.0f;
 constexpr float EnemyRadius = 17.0f;
 constexpr float ProjectileRadius = 4.0f;
-constexpr std::size_t MaximumEnemies = 18;
+constexpr std::size_t MaximumEnemies = 288;
+constexpr int PlayerMaxHealth = 20;
 
 float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
   const float x = left.x - right.x;
@@ -44,7 +59,34 @@ void DrawGrid(Engine::Renderer2D &renderer) {
 }
 
 int MaxHealthForFaction(BaseGame::Faction faction) {
-  return faction == BaseGame::Faction::Player ? 8 : 3;
+  return faction == BaseGame::Faction::Player ? PlayerMaxHealth : 3;
+}
+
+Engine::Vector2 NormalizeOrZero(Engine::Vector2 value) {
+  const float lengthSquared = value.x * value.x + value.y * value.y;
+  if (lengthSquared <= 0.0001f)
+    return {};
+  const float inverseLength = 1.0f / std::sqrt(lengthSquared);
+  return value * inverseLength;
+}
+
+Engine::Vector2 MouseAimFromPlayer(Engine::Vector2 playerPosition,
+                                   Engine::Vector2 fallback) {
+#if defined(_WIN32)
+  POINT mouse{};
+  if (::GetCursorPos(&mouse)) {
+    HWND window = ::GetForegroundWindow();
+    if (window && ::ScreenToClient(window, &mouse)) {
+      const Engine::Vector2 direction{
+          static_cast<float>(mouse.x) - playerPosition.x,
+          static_cast<float>(mouse.y) - playerPosition.y};
+      const Engine::Vector2 normalized = NormalizeOrZero(direction);
+      if (normalized.x != 0.0f || normalized.y != 0.0f)
+        return normalized;
+    }
+  }
+#endif
+  return fallback;
 }
 
 float HealthRatio(const BaseGame::Health *health) {
@@ -92,38 +134,28 @@ ProceduralGame::ProceduralGame() : world_(*gameInstance_.GetWorld()) {
 
 void ProceduralGame::RegisterGameplayTypes() {
   world_.RegisterComponent(
-      {BaseGame::ArenaDirector::Type, "ArenaDirector", [](ObjectRef owner) {
-         return NEW_OBJECT(BaseGame::ArenaDirector, owner);
-       }});
+      Engine::Gameplay::MakeComponentType<BaseGame::ArenaDirector>(
+          "ArenaDirector"));
   world_.RegisterComponent(
-      {BaseGame::PlayerMovement::Type, "PlayerMovement", [](ObjectRef owner) {
-         return NEW_OBJECT(BaseGame::PlayerMovement, owner);
-       }});
+      Engine::Gameplay::MakeComponentType<BaseGame::PlayerMovement>(
+          "PlayerMovement"));
   world_.RegisterComponent(
-      {BaseGame::EnemyMovement::Type, "EnemyMovement", [](ObjectRef owner) {
-         return NEW_OBJECT(BaseGame::EnemyMovement, owner);
-       }});
+      Engine::Gameplay::MakeComponentType<BaseGame::EnemyMovement>(
+          "EnemyMovement"));
   world_.RegisterComponent(
-      {BaseGame::PlayerWeapon::Type, "PlayerWeapon", [](ObjectRef owner) {
-         return NEW_OBJECT(BaseGame::PlayerWeapon, owner);
-       }});
+      Engine::Gameplay::MakeComponentType<BaseGame::PlayerWeapon>(
+          "PlayerWeapon"));
   world_.RegisterComponent(
-      {BaseGame::EnemyWeapon::Type, "EnemyWeapon", [](ObjectRef owner) {
-         return NEW_OBJECT(BaseGame::EnemyWeapon, owner);
-       }});
-  world_.RegisterComponent({BaseGame::ProjectileMovement::Type,
-                            "ProjectileMovement", [](ObjectRef owner) {
-                              return NEW_OBJECT(BaseGame::ProjectileMovement,
-                                                owner);
-                            }});
+      Engine::Gameplay::MakeComponentType<BaseGame::EnemyWeapon>(
+          "EnemyWeapon"));
   world_.RegisterComponent(
-      {BaseGame::Health::Type, "Health",
-       [](ObjectRef owner) { return NEW_OBJECT(BaseGame::Health, owner); }});
-  world_.RegisterComponent({BaseGame::ProjectileDamage::Type,
-                            "ProjectileDamage", [](ObjectRef owner) {
-                              return NEW_OBJECT(BaseGame::ProjectileDamage,
-                                                owner);
-                            }});
+      Engine::Gameplay::MakeComponentType<BaseGame::ProjectileMovement>(
+          "ProjectileMovement"));
+  world_.RegisterComponent(
+      Engine::Gameplay::MakeComponentType<BaseGame::Health>("Health"));
+  world_.RegisterComponent(
+      Engine::Gameplay::MakeComponentType<BaseGame::ProjectileDamage>(
+          "ProjectileDamage"));
 
   world_.RegisterEntity({BaseGame::ArenaDirectorEntityType,
                          "ArenaDirector",
@@ -176,7 +208,7 @@ void ProceduralGame::EnsureCoreEntities() {
         static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
         static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
     player->GetComponent<BaseGame::Health>().Resolve()->Configure(
-        BaseGame::Faction::Player, 8);
+        BaseGame::Faction::Player, PlayerMaxHealth);
   }
 
   playerMovement_ = player->GetComponent<BaseGame::PlayerMovement>();
@@ -185,16 +217,19 @@ void ProceduralGame::EnsureCoreEntities() {
 }
 
 void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
+  ENGINE_PROFILE_SCOPE("BaseGame Update");
   const PlayerCommand command = inputBindings_.BuildPlayerCommand(input);
   auto *movement = playerMovement_.Resolve();
   auto *weapon = playerWeapon_.Resolve();
-  if (movement)
+  if (movement) {
     movement->SetCommand(command);
+    if (const auto *player = playerEntity_.Resolve()) {
+      movement->SetFacing(
+          MouseAimFromPlayer(player->transform.position, movement->Facing()));
+    }
+  }
   if (weapon && movement) {
-    const Engine::Vector2 aim =
-        (command.movement.x != 0.0f || command.movement.y != 0.0f)
-            ? command.movement
-            : movement->Facing();
+    const Engine::Vector2 aim = movement->Facing();
     weapon->SetTrigger(command.firing, aim);
   }
 
@@ -238,6 +273,7 @@ ObjectRef ProceduralGame::SpawnProjectile(TypeID type, Engine::Vector2 position,
 }
 
 void ProceduralGame::ProcessFrameRequests() {
+  ENGINE_PROFILE_SCOPE("Process Frame Requests");
   std::size_t enemyCount = 0;
   for (const ObjectID id : world_.Entities()) {
     const auto *entity = ObjectRef(id).Resolve();
@@ -278,6 +314,7 @@ void ProceduralGame::ProcessFrameRequests() {
 }
 
 void ProceduralGame::ProcessCollisionsAndLifetime() {
+  ENGINE_PROFILE_SCOPE("Collisions And Lifetime");
   struct Target {
     ObjectRef entity;
     BaseGame::Health *health;
@@ -335,7 +372,7 @@ void ProceduralGame::ProcessCollisionsAndLifetime() {
       entity->transform.position = {
           static_cast<float>(GameConfig::PlayAreaWidth) * 0.5f,
           static_cast<float>(GameConfig::PlayAreaHeight) * 0.5f};
-      target.health->Configure(BaseGame::Faction::Player, 8);
+      target.health->Configure(BaseGame::Faction::Player, PlayerMaxHealth);
     } else {
       world_.Destroy(target.entity);
     }
@@ -348,14 +385,17 @@ Engine::Color ProceduralGame::GetClearColor() const {
 }
 
 void ProceduralGame::Render(Engine::RenderContext &context) const {
+  ENGINE_PROFILE_SCOPE("BaseGame Render");
   Engine::Renderer2D &renderer = context.Draw2D();
   DrawGrid(renderer);
 
+  std::size_t entities = 0;
   std::size_t enemies = 0;
   for (const ObjectID id : world_.Entities()) {
     const auto *entity = ObjectRef(id).Resolve();
     if (!entity)
       continue;
+    ++entities;
     const TypeID type = entity->GetTypeID();
     if (type == BaseGame::PlayerEntityType) {
       renderer.DrawCircle(entity->transform.position, PlayerRadius,
@@ -392,10 +432,11 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
   }
 
   const auto *health = playerHealth_.Resolve();
-  renderer.DrawText("ARROWS: MOVE   HOLD W: FIRE", {24.0f, 22.0f}, 20,
+  renderer.DrawText("WASD: MOVE   AUTO FIRE   MOUSE: AIM", {24.0f, 22.0f}, 20,
                     {220, 220, 225, 255});
   renderer.DrawText("HP: " + std::to_string(health ? health->HitPoints() : 0) +
-                        "   ENEMIES: " + std::to_string(enemies),
+                        "   ENEMIES: " + std::to_string(enemies) +
+                        "   ENTITIES: " + std::to_string(entities),
                     {24.0f, 50.0f}, 20, {255, 203, 0, 255});
 #if !defined(GAME_RELEASE_BUILD)
   renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
@@ -403,10 +444,12 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
 }
 
 std::vector<std::byte> ProceduralGame::SaveResumeState() const {
+  ENGINE_PROFILE_SCOPE("Save Resume State");
   return world_.Save();
 }
 
 void ProceduralGame::ResumeFromState(std::span<const std::byte> state) {
+  ENGINE_PROFILE_SCOPE("Resume From State");
   world_.Resume(state);
   playerEntity_ = {};
   playerMovement_ = {};

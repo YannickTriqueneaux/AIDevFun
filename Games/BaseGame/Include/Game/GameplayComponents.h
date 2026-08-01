@@ -40,7 +40,7 @@ public:
 
 private:
   [[nodiscard]] float RandomUnit();
-  float spawnCooldown_ = 0.2f;
+  float spawnCooldown_ = 0.05f;
   std::uint32_t randomState_ = 0x51a7e5u;
   bool spawnPending_ = false;
   Engine::Vector2 pendingPosition_{};
@@ -55,6 +55,7 @@ public:
   [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 1; }
   [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
   void SetCommand(PlayerCommand command) { command_ = command; }
+  void SetFacing(Engine::Vector2 facing) { facing_ = facing; }
   [[nodiscard]] Engine::Vector2 Facing() const { return facing_; }
   void Update(float deltaTime) override;
   void SaveState(StateWriter &writer) const override;

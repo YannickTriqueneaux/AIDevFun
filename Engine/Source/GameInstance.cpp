@@ -29,13 +29,18 @@ GameInstance::~GameInstance() {
       entry->destroy(entry->component);
   }
   DELETE_MEMORY(impl_);
-  if (ActiveGameInstance == this)
+  if (ActiveGameInstance == this) {
     ActiveGameInstance = nullptr;
+    Gameplay::SetActiveObjectPoolDomain(0);
+  }
 }
 
 GameInstance *GameInstance::GetInstance() { return ActiveGameInstance; }
 
-void GameInstance::Activate() { ActiveGameInstance = this; }
+void GameInstance::Activate() {
+  ActiveGameInstance = this;
+  Gameplay::SetActiveObjectPoolDomain(objectPoolDomain_.Get());
+}
 
 Gameplay::ObjectManager *GameInstance::GetObjectManager() {
   return &objectManager_;

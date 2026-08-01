@@ -45,6 +45,7 @@ private:
   [[nodiscard]] const GameInstanceComponent *
   FindComponent(Gameplay::TypeID type) const;
 
+  Gameplay::ObjectPoolDomainScope objectPoolDomain_;
   Gameplay::ObjectManager objectManager_;
   Gameplay::World world_;
   class Impl;

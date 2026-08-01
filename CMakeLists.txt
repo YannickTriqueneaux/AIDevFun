@@ -59,6 +59,23 @@ endif()
 
 message(STATUS "Active game project: ${GAME_PROJECT}")
 
+option(ENGINE_PROFILE_ENABLED "Enable Tracy profiling instrumentation" OFF)
+set(TRACY_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../tracy-master" CACHE PATH
+    "Path to the Tracy source tree")
+if(ENGINE_PROFILE_ENABLED)
+    if(NOT EXISTS "${TRACY_SOURCE_DIR}/public/TracyClient.cpp")
+        message(FATAL_ERROR
+            "ENGINE_PROFILE_ENABLED requires a valid TRACY_SOURCE_DIR: "
+            "${TRACY_SOURCE_DIR}")
+    endif()
+    set(TRACY_ENABLE ON CACHE BOOL "" FORCE)
+    set(TRACY_STATIC OFF CACHE BOOL "" FORCE)
+    add_subdirectory(
+        "${TRACY_SOURCE_DIR}"
+        "${CMAKE_BINARY_DIR}/_deps/tracy-build"
+        EXCLUDE_FROM_ALL)
+endif()
+
 add_library(EngineImGui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -104,6 +121,16 @@ add_library(Engine SHARED
 
 target_include_directories(Engine PUBLIC Engine/Include)
 target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
+if(ENGINE_PROFILE_ENABLED)
+    target_link_libraries(Engine PUBLIC Tracy::TracyClient)
+    target_compile_definitions(Engine PUBLIC ENGINE_PROFILE_ENABLED)
+    add_custom_command(
+        TARGET Engine
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:TracyClient>
+            $<TARGET_FILE_DIR:Engine>)
+endif()
 if(WIN32)
     target_link_libraries(Engine PRIVATE winhttp)
     target_link_libraries(

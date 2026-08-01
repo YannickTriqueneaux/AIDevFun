@@ -21,11 +21,10 @@ struct alignas(32) GeneralAllocation {
   int values[8]{};
   explicit GeneralAllocation(int initial) { values[0] = initial; }
 };
-class TestComponent final : public Component {
+class TestComponent : public Component {
 public:
-  TestComponent(ObjectRef<Entity> owner, TypeID type, int marker)
-      : Component(owner), type_(type), marker_(marker) {}
-  TypeID GetTypeID() const override { return type_; }
+  TestComponent(ObjectRef<Entity> owner, int marker)
+      : Component(owner), marker_(marker) {}
   std::uint32_t CurrentStateVersion() const override { return 2; }
   std::uint32_t MinimumStateVersion() const override { return 1; }
   void Update(float) override {
@@ -41,8 +40,23 @@ public:
   int ticks = 0;
 
 private:
-  TypeID type_;
   int marker_;
+};
+
+class FirstTestComponent final : public TestComponent {
+public:
+  static constexpr TypeID Type = FirstType;
+  explicit FirstTestComponent(ObjectRef<Entity> owner)
+      : TestComponent(owner, 1) {}
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+};
+
+class SecondTestComponent final : public TestComponent {
+public:
+  static constexpr TypeID Type = SecondType;
+  explicit SecondTestComponent(ObjectRef<Entity> owner)
+      : TestComponent(owner, 2) {}
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
 };
 
 class TestGameInstanceComponent final : public Engine::GameInstanceComponent {
@@ -74,19 +88,13 @@ public:
 };
 
 void ConfigureTestWorld(World &w) {
-  w.RegisterComponent({FirstType, "First", [](ObjectRef<Entity> owner) {
-                         return NEW_OBJECT(TestComponent, owner, FirstType, 1);
-                       }});
-  w.RegisterComponent({SecondType, "Second", [](ObjectRef<Entity> owner) {
-                         return NEW_OBJECT(TestComponent, owner, SecondType, 2);
-                       }});
+  w.RegisterComponent(MakeComponentType<FirstTestComponent>("First"));
+  w.RegisterComponent(MakeComponentType<SecondTestComponent>("Second"));
   w.RegisterEntity({TestEntity, "TestEntity", {SecondType, FirstType}});
 }
 
 void ConfigureReplacementWorld(World &w) {
-  w.RegisterComponent({FirstType, "First", [](ObjectRef<Entity> owner) {
-                         return NEW_OBJECT(TestComponent, owner, FirstType, 1);
-                       }});
+  w.RegisterComponent(MakeComponentType<FirstTestComponent>("First"));
   w.RegisterEntity(
       {StableTypeID("Tests.ReplacementEntity"), "Replacement", {FirstType}});
 }
@@ -148,10 +156,18 @@ void TestGameInstanceLifecycle() {
       Require(secondReference.GetID() == sharedReference.GetID() &&
                   sharedReference.Resolve()->transform.position.x == 20.0f,
               "ObjectRef did not resolve through the newest active manager.");
+      updateOrder.clear();
+      second.GetWorld()->Update(0.016f);
+      Require(updateOrder == std::vector<int>({1, 2}),
+              "Active pool update leaked across GameInstance domains.");
 
       first.Activate();
       Require(sharedReference.Resolve()->transform.position.x == 10.0f,
               "ObjectRef did not follow explicit GameInstance activation.");
+      updateOrder.clear();
+      first.GetWorld()->Update(0.016f);
+      Require(updateOrder == std::vector<int>({1, 2}),
+              "Reactivated pool update used another GameInstance domain.");
     }
 
     Require(Engine::GameInstance::GetInstance() == &first &&
@@ -276,11 +292,50 @@ int main() {
     Require(entity->GetComponent<TestComponent>().IsAssigned(),
             "Entity typed component lookup failed.");
     updateOrder.clear();
+    const std::size_t lookupsBeforeUpdate =
+        world.Objects().GetObjectLookupCount();
     world.Update(0.016f);
     Require(updateOrder == std::vector<int>({1, 2}),
             "Components were not updated in registered type order.");
+    Require(world.Objects().GetObjectLookupCount() == lookupsBeforeUpdate,
+            "Component pool update performed ObjectManager lookups.");
+
+    for (int index = 0; index < 3; ++index)
+      (void)world.Spawn(TestEntity, "Contiguous" + std::to_string(index));
+    world.FlushSpawns();
+    std::vector<void *> firstComponentAddresses;
+    VisitObjectsInActivePool(
+        ObjectStorageTypeID<FirstTestComponent>(), sizeof(FirstTestComponent),
+        alignof(FirstTestComponent),
+        [](void *object, void *context) {
+          static_cast<std::vector<void *> *>(context)->push_back(object);
+        },
+        &firstComponentAddresses);
+    Require(firstComponentAddresses.size() == 4,
+            "Direct component pool iteration missed live components.");
+    const auto firstStride =
+        static_cast<std::byte *>(firstComponentAddresses[1]) -
+        static_cast<std::byte *>(firstComponentAddresses[0]);
+    Require(
+        firstStride > 0 &&
+            static_cast<std::byte *>(firstComponentAddresses[2]) -
+                    static_cast<std::byte *>(firstComponentAddresses[1]) ==
+                firstStride &&
+            static_cast<std::byte *>(firstComponentAddresses[3]) -
+                    static_cast<std::byte *>(firstComponentAddresses[2]) ==
+                firstStride,
+        "Objects of one type were not laid out contiguously in pool order.");
+    updateOrder.clear();
+    const std::size_t lookupsBeforeBatchUpdate =
+        world.Objects().GetObjectLookupCount();
+    world.Update(0.016f);
+    Require(updateOrder == std::vector<int>({1, 1, 1, 1, 2, 2, 2, 2}),
+            "World did not update complete component pools in type order.");
+    Require(world.Objects().GetObjectLookupCount() == lookupsBeforeBatchUpdate,
+            "Batch component pool update performed ObjectManager lookups.");
     const auto oldComponent = entity->components[0];
-    constexpr TypeID componentStorage = ObjectStorageTypeID<TestComponent>();
+    constexpr TypeID componentStorage =
+        ObjectStorageTypeID<FirstTestComponent>();
     const auto componentMemoryID = GetObjectAllocationInfo(
         componentStorage,
         world.Objects().GetAs<Component>(entity->components[1].GetID()));
@@ -349,7 +404,7 @@ int main() {
     const auto *replacementEntity = replacement.Resolve();
     const auto replacementMemoryID = GetObjectAllocationInfo(
         componentStorage, world.Objects().GetAs<Component>(
-                              replacementEntity->components[0].GetID()));
+                              replacementEntity->components[1].GetID()));
     Require(replacementMemoryID.index == componentMemoryID.index &&
                 replacementMemoryID.version != componentMemoryID.version,
             "Dedicated Object pool did not recycle its sparse memory slot "

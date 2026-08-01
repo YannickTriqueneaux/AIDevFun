@@ -6,6 +6,8 @@
 #include <functional>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace Engine::Gameplay {
@@ -13,7 +15,26 @@ struct ComponentType {
   TypeID id;
   std::string name;
   std::function<ObjectPtr(ObjectRef<Entity>)> create;
+  void (*updatePool)(float deltaTime) = nullptr;
 };
+
+template <class T> ComponentType MakeComponentType(std::string name) {
+  static_assert(std::is_base_of_v<Component, T>);
+  return {T::Type, std::move(name),
+          [](ObjectRef<Entity> owner) { return NEW_OBJECT(T, owner); },
+          [](float deltaTime) {
+            struct UpdateContext {
+              float deltaTime;
+            } context{deltaTime};
+            VisitObjectsInActivePool(
+                ObjectStorageTypeID<T>(), sizeof(T), alignof(T),
+                [](void *object, void *rawContext) {
+                  auto *update = static_cast<UpdateContext *>(rawContext);
+                  static_cast<T *>(object)->Update(update->deltaTime);
+                },
+                &context);
+          }};
+}
 struct EntityType {
   TypeID id;
   std::string name;

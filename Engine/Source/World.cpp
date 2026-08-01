@@ -1,5 +1,6 @@
 #include "Engine/Gameplay/World.h"
 #include "Engine/Core/Memory.h"
+#include "Engine/Core/Profile.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -27,7 +28,6 @@ public:
   std::vector<ComponentType> componentTypes;
   std::unordered_map<TypeID, std::size_t> componentLookup;
   std::unordered_map<TypeID, EntityType> entityTypes;
-  std::unordered_map<TypeID, std::vector<ObjectID>> componentUpdatePools;
   std::vector<ObjectID> entities;
   std::vector<SpawnRequest> spawns;
   std::vector<ObjectID> destroys;
@@ -47,10 +47,10 @@ World &World::operator=(World &&other) noexcept {
 }
 
 void World::RegisterComponent(ComponentType type) {
-  if (type.id == 0 || !type.create || impl_->componentLookup.contains(type.id))
+  if (type.id == 0 || !type.create || !type.updatePool ||
+      impl_->componentLookup.contains(type.id))
     throw std::invalid_argument("Invalid or duplicate ComponentType.");
   impl_->componentLookup[type.id] = impl_->componentTypes.size();
-  impl_->componentUpdatePools[type.id];
   impl_->componentTypes.push_back(std::move(type));
 }
 
@@ -103,20 +103,17 @@ void World::Impl::CreateEntity(ObjectID id, TypeID type,
     else
       objects.BindReserved(componentID, std::move(component));
     entity->components.emplace_back(componentID);
-    componentUpdatePools[componentType].push_back(componentID);
     objects.SetDebugName(componentID, name + "+" + descriptor.name);
   }
 }
 
 void World::FlushSpawns() {
+  ENGINE_PROFILE_SCOPE("Flush Spawns");
   for (ObjectID id : impl_->destroys) {
     auto *entity = impl_->objects.GetAs<Entity>(id);
     if (!entity)
       continue;
     for (ObjectRef<Component> component : entity->components) {
-      for (auto &[type, pool] : impl_->componentUpdatePools)
-        pool.erase(std::remove(pool.begin(), pool.end(), component.GetID()),
-                   pool.end());
       impl_->objects.Destroy(component.GetID());
     }
     impl_->entities.erase(
@@ -131,16 +128,16 @@ void World::FlushSpawns() {
 }
 
 void World::Update(float deltaTime) {
+  ENGINE_PROFILE_SCOPE("World Update");
   for (const auto &type : impl_->componentTypes) {
-    const auto ids = impl_->componentUpdatePools.at(type.id);
-    for (ObjectID id : ids)
-      if (auto *component = impl_->objects.GetAs<Component>(id))
-        component->Update(deltaTime);
+    ENGINE_PROFILE_DYNAMIC_SCOPE(type.name.c_str());
+    type.updatePool(deltaTime);
   }
   FlushSpawns();
 }
 
 std::vector<std::byte> World::Save() const {
+  ENGINE_PROFILE_SCOPE("World Save");
   StateWriter writer;
   writer.Value(Magic);
   writer.Value(Format);
@@ -168,6 +165,7 @@ std::vector<std::byte> World::Save() const {
 }
 
 void World::Resume(std::span<const std::byte> state) {
+  ENGINE_PROFILE_SCOPE("World Resume");
   StateReader reader(state);
   if (reader.Value<std::uint32_t>() != Magic ||
       reader.Value<std::uint32_t>() != Format)
@@ -176,8 +174,6 @@ void World::Resume(std::span<const std::byte> state) {
   impl_->entities.clear();
   impl_->spawns.clear();
   impl_->destroys.clear();
-  for (auto &[type, pool] : impl_->componentUpdatePools)
-    pool.clear();
   const auto count = reader.Value<std::uint32_t>();
   for (std::uint32_t n = 0; n < count; ++n) {
     const auto entityID = reader.Value<ObjectID>();

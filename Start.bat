@@ -6,9 +6,26 @@ set "GAMES_DIR=%PROJECT_ROOT%\Games"
 set "BASE_GAME_DIR=%GAMES_DIR%\BaseGame"
 set "CONFIGURATION=Debug"
 set "GAME_COUNT=0"
-set "REQUESTED_GAME=%~1"
+set "REQUESTED_GAME="
+set "PROFILE_ENABLED=OFF"
 set "OPENAI_CONFIG_SCRIPT=%PROJECT_ROOT%\AssistantHost\Config\ConfigureOpenAI.ps1"
 set "OPENAI_SETTINGS=%PROJECT_ROOT%\AssistantHost\Config\settings.json"
+
+:parse_arguments
+if "%~1"=="" goto :arguments_parsed
+if /I "%~1"=="-profile" (
+    set "PROFILE_ENABLED=ON"
+) else (
+    if defined REQUESTED_GAME (
+        echo Unexpected argument: %~1
+        exit /b 1
+    )
+    set "REQUESTED_GAME=%~1"
+)
+shift
+goto :parse_arguments
+
+:arguments_parsed
 
 if not exist "%OPENAI_CONFIG_SCRIPT%" (
     echo OpenAI configuration helper not found: "%OPENAI_CONFIG_SCRIPT%"
@@ -100,7 +117,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%STOP_SESSION_SCRIPT%" -Bui
 if errorlevel 1 goto :failure
 
 echo [2/4] Configuring CMake for %SELECTED_GAME%...
-cmake -S "%PROJECT_ROOT%" -B "%BUILD_DIR%" "-DGAME_PROJECT=%SELECTED_GAME%"
+cmake -S "%PROJECT_ROOT%" -B "%BUILD_DIR%" "-DGAME_PROJECT=%SELECTED_GAME%" "-DENGINE_PROFILE_ENABLED=%PROFILE_ENABLED%" "-DTRACY_SOURCE_DIR=%PROJECT_ROOT%\..\tracy-master"
 if errorlevel 1 goto :failure
 
 echo [3/4] Building %CONFIGURATION%...
@@ -114,6 +131,21 @@ if not exist "%LAUNCHER_PATH%" (
 )
 
 echo [4/4] Starting Launcher for %SELECTED_GAME%...
+if /I "%PROFILE_ENABLED%"=="ON" (
+    set "TRACY_PROFILER_SOURCE=%PROJECT_ROOT%\..\tracy-master\profiler"
+    set "TRACY_PROFILER_BUILD=%SystemDrive%\AITesterTracyProfiler"
+    echo Building Tracy Profiler...
+    cmake -S "!TRACY_PROFILER_SOURCE!" -B "!TRACY_PROFILER_BUILD!" "-DGIT_EXECUTABLE=%PROJECT_ROOT%\Tools\TracyGit.cmd" -DCMAKE_DISABLE_FIND_PACKAGE_Git=FALSE
+    if errorlevel 1 goto :failure
+    cmake --build "!TRACY_PROFILER_BUILD!" --config Release
+    if errorlevel 1 goto :failure
+    set "TRACY_PROFILER_PATH=!TRACY_PROFILER_BUILD!\Release\tracy-profiler.exe"
+    if not exist "!TRACY_PROFILER_PATH!" (
+        echo Tracy Profiler not found: "!TRACY_PROFILER_PATH!"
+        goto :failure
+    )
+    start "" /D "!TRACY_PROFILER_BUILD!\Release" "!TRACY_PROFILER_PATH!" -a 127.0.0.1
+)
 start "" /D "%BUILD_DIR%\%CONFIGURATION%" "%LAUNCHER_PATH%"
 
 echo Development session started for %SELECTED_GAME%.

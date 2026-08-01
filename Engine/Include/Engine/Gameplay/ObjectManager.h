@@ -38,6 +38,7 @@ public:
   void SetDebugName(ObjectID id, std::string name);
   [[nodiscard]] const std::string &GetDebugName(ObjectID id) const;
   [[nodiscard]] std::size_t LiveCount() const;
+  [[nodiscard]] std::size_t GetObjectLookupCount() const;
 
 private:
   class Impl;

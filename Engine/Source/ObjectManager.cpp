@@ -19,6 +19,7 @@ public:
   std::vector<std::uint32_t> freeIndices;
   std::unordered_map<ObjectID, std::string> names;
   std::size_t liveCount = 0;
+  mutable std::size_t objectLookupCount = 0;
 };
 
 ObjectManager::ObjectManager() : impl_(NEW_MEMORY(Impl).release()) {}
@@ -114,6 +115,7 @@ Object *ObjectManager::GetObject(ObjectID id) {
   return const_cast<Object *>(std::as_const(*this).GetObject(id));
 }
 const Object *ObjectManager::GetObject(ObjectID id) const {
+  ++impl_->objectLookupCount;
   if (!id.IsValid() || id.index >= impl_->slots.size())
     return nullptr;
   const auto &slot = impl_->slots[id.index];
@@ -138,4 +140,8 @@ const std::string &ObjectManager::GetDebugName(ObjectID id) const {
 }
 
 std::size_t ObjectManager::LiveCount() const { return impl_->liveCount; }
+
+std::size_t ObjectManager::GetObjectLookupCount() const {
+  return impl_->objectLookupCount;
+}
 } // namespace Engine::Gameplay

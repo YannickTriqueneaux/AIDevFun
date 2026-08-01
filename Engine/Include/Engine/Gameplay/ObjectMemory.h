@@ -10,12 +10,35 @@
 
 namespace Engine::Gameplay {
 class Object;
+using ObjectPoolDomain = std::uint64_t;
+using ObjectPoolVisitFunction = void (*)(void *object, void *context);
+
+ENGINE_API ObjectPoolDomain CreateObjectPoolDomain();
+ENGINE_API void DestroyObjectPoolDomain(ObjectPoolDomain domain) noexcept;
+ENGINE_API void SetActiveObjectPoolDomain(ObjectPoolDomain domain);
+ENGINE_API ObjectPoolDomain GetActiveObjectPoolDomain();
+
+class ENGINE_API ObjectPoolDomainScope {
+public:
+  ObjectPoolDomainScope();
+  ~ObjectPoolDomainScope();
+  ObjectPoolDomainScope(const ObjectPoolDomainScope &) = delete;
+  ObjectPoolDomainScope &operator=(const ObjectPoolDomainScope &) = delete;
+  [[nodiscard]] ObjectPoolDomain Get() const { return domain_; }
+
+private:
+  ObjectPoolDomain domain_ = 0;
+};
 
 ENGINE_API void *AllocateObjectMemory(TypeID storageType, std::size_t size,
                                       std::size_t alignment);
 ENGINE_API void ReleaseObjectMemory(TypeID storageType, void *memory,
                                     std::size_t size,
                                     std::size_t alignment) noexcept;
+ENGINE_API void VisitObjectsInActivePool(TypeID storageType, std::size_t size,
+                                         std::size_t alignment,
+                                         ObjectPoolVisitFunction visit,
+                                         void *context);
 
 struct ObjectPoolStats {
   std::size_t liveObjects = 0;

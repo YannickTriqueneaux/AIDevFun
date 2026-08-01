@@ -43,7 +43,7 @@ Preserve these invariants:
 1. Give every `Entity` and `Component` an `ObjectID { index, version }` through `World`/`ObjectManager`. Never manufacture IDs in gameplay.
 2. Store persistent relationships only as `ObjectRef<T>`. Never keep a pointer/reference to another gameplay object across frames. Call parameterless `Resolve()`, use the resulting pointer locally, then discard it. Resolution must flow through the active `GameInstance`; never pass an `ObjectManager` through gameplay APIs.
 3. Declare stable compile-time `TypeID`s with `StableTypeID("Game.Namespace.Type")`. Never derive them from registration order. Renaming the string deliberately breaks that type's saved state.
-4. Register component types in global update order. Declare each entity's component TypeID layout in its `EntityType`; spawn only through `World::Spawn`.
+4. Register each concrete component class with `MakeComponentType<T>()` in global update order. One ComponentType must map to one concrete C++ class and one physical object pool. `World::Update()` must visit live pointers directly in each active GameInstance pool; never rebuild parallel ObjectID update lists or resolve every component through ObjectManager. Declare each entity's component TypeID layout in its `EntityType`; spawn only through `World::Spawn`.
 5. Request spawn/destruction during gameplay and apply it at the frame boundary. A newly returned ref must remain unresolved until `FlushSpawns`.
 6. Put spatial state in `Entity::transform`; put behavior data in components. Keep gameplay state-driven.
 7. Implement `CurrentStateVersion`, `MinimumStateVersion`, `SaveState`, and `LoadState` on every component. Save the current schema, migrate supported legacy versions, and reject versions outside the declared range.
@@ -102,5 +102,9 @@ reactivation, inactive-instance destruction, clearing the active singleton,
 the single-World invariant, duplicate GameInstanceComponent TypeIDs, reverse
 component destruction order, and one pre-reload `ObjectRef` resolving the
 restored object through the renewed manager.
+
+For component update changes, assert type-batched update order, constant-stride
+addresses inside a pool page, isolation between simultaneous GameInstances,
+and that `World::Update()` does not increment ObjectManager's lookup counter.
 
 Review persistent gameplay fields before finishing. Replace every object pointer with an `ObjectRef`, or prove the value is transient and cannot cross a frame/reload boundary.

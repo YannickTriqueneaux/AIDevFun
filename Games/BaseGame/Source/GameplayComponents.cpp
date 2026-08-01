@@ -49,7 +49,7 @@ void ArenaDirector::Update(float deltaTime) {
                         static_cast<float>(GameConfig::PlayAreaHeight) - 20.0f};
   }
   spawnPending_ = true;
-  spawnCooldown_ = 0.55f + RandomUnit() * 0.75f;
+  spawnCooldown_ = 0.1375f + RandomUnit() * 0.1875f;
 }
 
 bool ArenaDirector::ConsumeEnemySpawn(Engine::Vector2 &position) {
@@ -89,8 +89,6 @@ void PlayerMovement::Update(float deltaTime) {
   if (!entity)
     return;
 
-  if (command_.movement.x != 0.0f || command_.movement.y != 0.0f)
-    facing_ = command_.movement;
   entity->transform.position +=
       command_.movement * (movementSpeed_ * deltaTime);
   entity->transform.position.x =

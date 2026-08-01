@@ -47,11 +47,18 @@ coexist, but only one instance is active. If loading or resume fails, the host
 reactivates the old instance. On success, existing ObjectIDs resolve against the
 restored manager in the new instance automatically.
 
-The component registration list defines update order across the world. This
-keeps related objects together and updates movement, weapons, projectiles, and
-other systems by component type rather than by walking one actor at a time.
-Components produce requests, while the game-level spawning handler applies
-entity creation and destruction at the frame boundary.
+The `MakeComponentType<T>()` registration list defines update order across the
+world. Each concrete component class has a paged sparse pool in its owning
+GameInstance domain. Slots inside a page have a constant memory stride, while
+free slots retain sparse generations for safe recycling. `World::Update()`
+visits live component pointers directly in each pool: it does not maintain a
+parallel ObjectID list and performs no ObjectManager lookup for dispatch.
+
+Pool domains isolate old and new GameInstances while two DLL generations
+briefly coexist. Destroying an instance releases its empty pool pages after its
+World and ObjectManager have destroyed their objects. Components produce
+requests, while the game-level spawning handler applies entity creation and
+destruction at the frame boundary.
 
 BaseGame demonstrates the intended composition:
 

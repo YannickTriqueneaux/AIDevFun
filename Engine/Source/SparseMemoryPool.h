@@ -17,26 +17,24 @@ struct PoolAllocationInfo {
 class SparseMemoryPool {
 public:
   SparseMemoryPool(std::size_t size, std::size_t alignment)
-      : size_(size), alignment_(alignment) {}
+      : size_(size), alignment_(alignment),
+        effectiveAlignment_(std::max(alignment_, alignof(Header))),
+        payloadOffset_(AlignUp(sizeof(Header), effectiveAlignment_)),
+        stride_(AlignUp(payloadOffset_ + size_, effectiveAlignment_)) {}
 
   ~SparseMemoryPool() {
-    for (auto &slot : slots_)
-      ::operator delete(slot.rawMemory);
+    for (const Page &page : pages_)
+      ::operator delete(page.memory, std::align_val_t(effectiveAlignment_));
   }
 
   void *Allocate(bool &recycled) {
-    std::uint32_t index;
-    if (freeIndices_.empty()) {
-      index = static_cast<std::uint32_t>(slots_.size());
-      slots_.emplace_back();
-      CreateBlock(index);
-      recycled = false;
-    } else {
-      index = freeIndices_.back();
-      freeIndices_.pop_back();
-      recycled = true;
-    }
+    if (freeIndices_.empty())
+      CreatePage();
+    const std::uint32_t index = freeIndices_.back();
+    freeIndices_.pop_back();
     Slot &slot = slots_[index];
+    recycled = slot.everAllocated;
+    slot.everAllocated = true;
     slot.occupied = true;
     HeaderAt(slot.payload)->version = slot.version;
     return slot.payload;
@@ -69,6 +67,13 @@ public:
   }
   [[nodiscard]] std::size_t Size() const { return size_; }
   [[nodiscard]] std::size_t Alignment() const { return alignment_; }
+  using VisitFunction = void (*)(void *payload, void *context);
+  void ForEachOccupied(VisitFunction visit, void *context) {
+    for (Slot &slot : slots_) {
+      if (slot.occupied)
+        visit(slot.payload, context);
+    }
+  }
   static SparseMemoryPool *PoolOf(const void *payload) {
     const Header *header = HeaderAt(payload);
     return header->magic == HeaderMagic ? header->pool : nullptr;
@@ -83,11 +88,20 @@ private:
     std::uint32_t version = 1;
   };
   struct Slot {
-    void *rawMemory = nullptr;
     void *payload = nullptr;
     std::uint32_t version = 1;
     bool occupied = false;
+    bool everAllocated = false;
   };
+  struct Page {
+    void *memory = nullptr;
+  };
+
+  static constexpr std::uint32_t SlotsPerPage = 64;
+
+  static std::size_t AlignUp(std::size_t value, std::size_t alignment) {
+    return (value + alignment - 1) / alignment * alignment;
+  }
 
   static Header *HeaderAt(void *payload) {
     return reinterpret_cast<Header *>(static_cast<std::byte *>(payload) -
@@ -98,27 +112,32 @@ private:
         static_cast<const std::byte *>(payload) - sizeof(Header));
   }
 
-  void CreateBlock(std::uint32_t index) {
-    const std::size_t effectiveAlignment =
-        std::max(alignment_, alignof(Header));
-    const std::size_t allocationSize =
-        sizeof(Header) + effectiveAlignment - 1 + size_;
-    void *raw = ::operator new(allocationSize);
-    void *candidate = static_cast<std::byte *>(raw) + sizeof(Header);
-    std::size_t space = allocationSize - sizeof(Header);
-    void *payload = std::align(effectiveAlignment, size_, candidate, space);
-    if (payload == nullptr) {
-      ::operator delete(raw);
-      throw std::bad_alloc();
+  void CreatePage() {
+    const std::uint32_t firstIndex = static_cast<std::uint32_t>(slots_.size());
+    slots_.reserve(slots_.size() + SlotsPerPage);
+    pages_.reserve(pages_.size() + 1);
+    void *memory = ::operator new(stride_ * SlotsPerPage,
+                                  std::align_val_t(effectiveAlignment_));
+    pages_.push_back({memory});
+    slots_.resize(slots_.size() + SlotsPerPage);
+    for (std::uint32_t offset = 0; offset < SlotsPerPage; ++offset) {
+      const std::uint32_t index = firstIndex + offset;
+      Slot &slot = slots_[index];
+      slot.payload =
+          static_cast<std::byte *>(memory) + offset * stride_ + payloadOffset_;
+      new (HeaderAt(slot.payload))
+          Header{HeaderMagic, this, index, slot.version};
     }
-    Slot &slot = slots_[index];
-    slot.rawMemory = raw;
-    slot.payload = payload;
-    new (HeaderAt(payload)) Header{HeaderMagic, this, index, slot.version};
+    for (std::uint32_t offset = SlotsPerPage; offset > 0; --offset)
+      freeIndices_.push_back(firstIndex + offset - 1);
   }
 
   std::size_t size_;
   std::size_t alignment_;
+  std::size_t effectiveAlignment_;
+  std::size_t payloadOffset_;
+  std::size_t stride_;
+  std::vector<Page> pages_;
   std::vector<Slot> slots_;
   std::vector<std::uint32_t> freeIndices_;
 };
