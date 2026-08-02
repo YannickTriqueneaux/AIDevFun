@@ -1,4 +1,5 @@
 #include "Engine/Graphics/Renderer2D.h"
+#include "Engine/Graphics/VectorShape.h"
 
 #include "raylib.h"
 
@@ -37,6 +38,11 @@ void Renderer2D::DrawText(std::string_view text, Vector2 position, int fontSize,
 }
 
 void Renderer2D::DrawFramesPerSecond(int x, int y) { DrawFPS(x, y); }
+
+void Renderer2D::DrawVectorShape(const VectorShape &shape,
+                                 const VectorShapeDrawParameters &parameters) {
+  shape.Draw(parameters);
+}
 
 int Renderer2D::GetWidth() const { return GetScreenWidth(); }
 

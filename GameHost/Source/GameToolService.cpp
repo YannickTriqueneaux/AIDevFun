@@ -142,6 +142,8 @@ GameToolService::GameToolService(ReloadableGame *game,
     : game_(game), gameRoot_(std::filesystem::weakly_canonical(gameRoot)),
       engineRoot_(std::filesystem::weakly_canonical(
           gameRoot_.parent_path().parent_path() / "Engine")),
+      skillsRoot_(std::filesystem::weakly_canonical(
+          gameRoot_.parent_path().parent_path() / "docs" / "skills")),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
       recoveryMode_(recoveryMode),
@@ -169,6 +171,40 @@ std::string GameToolService::HandleRequest(std::string_view request) {
                 {"reloadStatus", game_
                                      ? game_->GetReloadStatus()
                                      : "Game is stopped for crash recovery."}};
+    } else if (command == "list_agent_skills") {
+      nlohmann::json skills = nlohmann::json::array();
+      std::vector<std::filesystem::path> skillFiles;
+      for (const auto &entry :
+           std::filesystem::directory_iterator(skillsRoot_)) {
+        const auto skillFile = entry.path() / "SKILL.md";
+        if (!entry.is_directory() ||
+            !std::filesystem::is_regular_file(skillFile))
+          continue;
+        skillFiles.push_back(skillFile);
+      }
+      std::ranges::sort(skillFiles);
+      for (const auto &skillFile : skillFiles) {
+        const std::string content = ReadTextFile(skillFile);
+        const auto readField = [&content](std::string_view field) {
+          const std::string prefix = std::string(field) + ":";
+          const std::size_t start = content.find(prefix);
+          if (start == std::string::npos)
+            return std::string{};
+          const std::size_t valueStart =
+              content.find_first_not_of(" \t", start + prefix.size());
+          const std::size_t end = content.find_first_of("\r\n", valueStart);
+          return content.substr(valueStart, end - valueStart);
+        };
+        skills.push_back({{"name", readField("name")},
+                          {"description", readField("description")}});
+      }
+      result = {{"skills", std::move(skills)}, {"readOnly", true}};
+    } else if (command == "read_agent_skill") {
+      const std::filesystem::path file =
+          ResolveAgentSkill(arguments.at("name").get<std::string>());
+      result = {{"name", file.parent_path().filename().string()},
+                {"content", ReadTextFile(file)},
+                {"readOnly", true}};
     } else if (command == "read_game_file") {
       const std::filesystem::path file =
           ResolveGameFile(arguments.at("path").get<std::string>());
@@ -540,6 +576,24 @@ GameToolService::ResolveEngineFile(std::string_view relativePath) const {
   }
   if (!std::filesystem::is_regular_file(resolved)) {
     throw std::runtime_error("Engine file does not exist.");
+  }
+  return resolved;
+}
+
+std::filesystem::path
+GameToolService::ResolveAgentSkill(std::string_view name) const {
+  if (name.empty() || name.size() > 63 ||
+      !std::ranges::all_of(name, [](char character) {
+        return (character >= 'a' && character <= 'z') ||
+               (character >= '0' && character <= '9') || character == '-';
+      })) {
+    throw std::runtime_error("Invalid skill name.");
+  }
+  const std::filesystem::path resolved = std::filesystem::weakly_canonical(
+      skillsRoot_ / std::string(name) / "SKILL.md");
+  if (!IsPathInside(resolved, skillsRoot_) ||
+      !std::filesystem::is_regular_file(resolved)) {
+    throw std::runtime_error("Agent skill does not exist.");
   }
   return resolved;
 }

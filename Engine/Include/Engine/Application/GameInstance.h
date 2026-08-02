@@ -25,6 +25,9 @@ public:
 
   [[nodiscard]] static GameInstance *GetInstance();
   void Activate();
+  [[nodiscard]] Gameplay::ObjectPoolDomain GetObjectPoolDomain() const {
+    return objectPoolDomain_.Get();
+  }
 
   [[nodiscard]] Gameplay::ObjectManager *GetObjectManager();
   [[nodiscard]] const Gameplay::ObjectManager *GetObjectManager() const;

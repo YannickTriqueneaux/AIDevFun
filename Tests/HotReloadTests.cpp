@@ -76,6 +76,7 @@ int main(int argc, char **argv) {
     Engine::Gameplay::ObjectManager *firstManager =
         firstInstance->GetObjectManager();
     Engine::Gameplay::World *firstWorld = firstInstance->GetWorld();
+    const auto firstDomain = firstInstance->GetObjectPoolDomain();
 
     RecordingSerializer before;
     game.SerializeAutoTestState(before);
@@ -117,6 +118,14 @@ int main(int argc, char **argv) {
                     firstManager &&
                 Engine::GameInstance::GetInstance()->GetWorld() != firstWorld,
             "Hot reload reused the old ObjectManager or World.");
+    Require(!Engine::Gameplay::IsObjectPoolDomainAlive(firstDomain),
+            "The old GameInstance Object pool domain survived hot reload.");
+    const auto *reloadedInstance = Engine::GameInstance::GetInstance();
+    Require(Engine::Gameplay::GetObjectPoolDomainStats(
+                reloadedInstance->GetObjectPoolDomain())
+                    .liveObjects ==
+                reloadedInstance->GetObjectManager()->LiveCount(),
+            "The restored domain contains orphaned gameplay objects.");
     Require(playerRef.Resolve() != nullptr &&
                 playerRef.Resolve()->transform.position.x ==
                     ReadFloat(afterTick, "player.position.x") &&
@@ -138,6 +147,18 @@ int main(int argc, char **argv) {
     }
     Require(afterReload.values == afterTick.values,
             "Entity/component state or ObjectIDs changed across DLL reload.");
+
+    const auto secondDomain = reloadedInstance->GetObjectPoolDomain();
+    game.RequestReload();
+    game.ProcessAutoTestReload();
+    Require(!Engine::Gameplay::IsObjectPoolDomainAlive(secondDomain),
+            "A prior Object pool domain survived a repeated hot reload.");
+    const auto *thirdInstance = Engine::GameInstance::GetInstance();
+    Require(Engine::Gameplay::GetObjectPoolDomainStats(
+                thirdInstance->GetObjectPoolDomain())
+                    .liveObjects ==
+                thirdInstance->GetObjectManager()->LiveCount(),
+            "Repeated hot reload left duplicate component allocations.");
 
     std::cout << "Headless gameplay and hot reload passed with "
               << afterReload.values.size() << " state fields.\n";

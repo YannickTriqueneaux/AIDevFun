@@ -113,6 +113,7 @@ add_library(Engine SHARED
     Engine/Source/PromptProcessor.cpp
     Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/VectorShape.cpp
     Engine/Source/Renderer3D.cpp
     Engine/Source/ShaderProgram.cpp
     Engine/Source/Settings.cpp
@@ -201,6 +202,7 @@ add_executable(GameRelease WIN32
     Engine/Source/ObjectMemory.cpp
     Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
+    Engine/Source/VectorShape.cpp
     Engine/Source/Renderer3D.cpp
     Engine/Source/ShaderProgram.cpp
     Engine/Source/UiSystem.cpp

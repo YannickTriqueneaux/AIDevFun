@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vector Shapes"
+  short_description: "Build animated SVG visuals for games"
+  default_prompt: "Use $vector-shapes to create an efficient embedded SVG visual with named-group animation for the game."

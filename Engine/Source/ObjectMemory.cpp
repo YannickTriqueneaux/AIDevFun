@@ -5,6 +5,7 @@
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Engine::Gameplay {
 namespace {
@@ -31,11 +32,17 @@ struct Pool {
 };
 std::mutex poolMutex;
 std::unordered_map<PoolKey, std::unique_ptr<Pool>, PoolKeyHash> pools;
+std::unordered_set<ObjectPoolDomain> liveDomains;
 std::atomic<ObjectPoolDomain> nextDomain{1};
 ObjectPoolDomain activeDomain = 0;
 } // namespace
 
-ObjectPoolDomain CreateObjectPoolDomain() { return nextDomain.fetch_add(1); }
+ObjectPoolDomain CreateObjectPoolDomain() {
+  const ObjectPoolDomain domain = nextDomain.fetch_add(1);
+  std::scoped_lock lock(poolMutex);
+  liveDomains.insert(domain);
+  return domain;
+}
 
 void DestroyObjectPoolDomain(ObjectPoolDomain domain) noexcept {
   std::scoped_lock lock(poolMutex);
@@ -48,6 +55,7 @@ void DestroyObjectPoolDomain(ObjectPoolDomain domain) noexcept {
       std::terminate();
     entry = pools.erase(entry);
   }
+  liveDomains.erase(domain);
 }
 
 ObjectPoolDomainScope::ObjectPoolDomainScope()
@@ -65,6 +73,11 @@ void SetActiveObjectPoolDomain(ObjectPoolDomain domain) {
 ObjectPoolDomain GetActiveObjectPoolDomain() {
   std::scoped_lock lock(poolMutex);
   return activeDomain;
+}
+
+bool IsObjectPoolDomainAlive(ObjectPoolDomain domain) {
+  std::scoped_lock lock(poolMutex);
+  return liveDomains.contains(domain);
 }
 
 void *AllocateObjectMemory(TypeID storageType, std::size_t size,
@@ -126,6 +139,20 @@ ObjectPoolStats GetObjectPoolStats(TypeID storageType) {
   ObjectPoolStats combined;
   for (const auto &[key, pool] : pools) {
     if (key.storageType != storageType)
+      continue;
+    combined.liveObjects += pool->stats.liveObjects;
+    combined.totalAllocations += pool->stats.totalAllocations;
+    combined.recycledAllocations += pool->stats.recycledAllocations;
+    combined.availableBlocks += pool->stats.availableBlocks;
+  }
+  return combined;
+}
+
+ObjectPoolStats GetObjectPoolDomainStats(ObjectPoolDomain domain) {
+  std::scoped_lock lock(poolMutex);
+  ObjectPoolStats combined;
+  for (const auto &[key, pool] : pools) {
+    if (key.domain != domain)
       continue;
     combined.liveObjects += pool->stats.liveObjects;
     combined.totalAllocations += pool->stats.totalAllocations;

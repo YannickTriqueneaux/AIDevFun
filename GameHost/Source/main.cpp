@@ -23,7 +23,7 @@
 
 int main(int argc, char **argv) {
   try {
-    Engine::ProfileSession profileSession;
+    [[maybe_unused]] Engine::ProfileSession profileSession;
     const std::filesystem::path executableDirectory =
         std::filesystem::absolute(argc > 0 ? std::filesystem::path(argv[0])
                                            : std::filesystem::path{})

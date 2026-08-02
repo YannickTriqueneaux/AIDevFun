@@ -241,6 +241,17 @@ nlohmann::json CreateGameToolDefinitions() {
       {tool("list_game_files",
             "List editable C++ source files in the Game module.",
             nlohmann::json::object(), nlohmann::json::array()),
+       tool("list_agent_skills",
+            "List read-only repository skills and their trigger descriptions. "
+            "Call this before implementation work.",
+            nlohmann::json::object(), nlohmann::json::array()),
+       tool("read_agent_skill",
+            "Read one applicable repository SKILL.md completely before "
+            "editing Game code.",
+            {{"name",
+              {{"type", "string"},
+               {"description", "Skill name returned by list_agent_skills."}}}},
+            {"name"}),
        tool("read_game_file",
             "Read one C++ source file inside the Game module.",
             {{"path",

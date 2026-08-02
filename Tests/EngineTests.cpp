@@ -2,6 +2,7 @@
 #include "Engine/Core/Memory.h"
 #include "Engine/Gameplay/World.h"
 #include "Engine/Graphics/Color.h"
+#include "Engine/Graphics/VectorShape.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Input/Key.h"
 #include "Engine/Math/Vector2.h"
@@ -181,10 +182,71 @@ void TestGameInstanceLifecycle() {
   Require(gameInstanceComponentDestructionOrder == std::vector<int>({2, 1}),
           "GameInstanceComponents were not destroyed in reverse order.");
 }
+
+void TestVectorShapes() {
+  enum class Group : std::size_t { Body, Weapon, Count };
+  static constexpr std::array<std::string_view,
+                              static_cast<std::size_t>(Group::Count)>
+      groupNames{"body", "weapon"};
+  static constexpr std::string_view svg = R"svg(
+<svg viewBox="0 0 100 80">
+  <g id="body" transform="translate(2 3)">
+    <rect x="10" y="10" width="40" height="20" fill="#4ADE9C"/>
+  </g>
+  <g id="weapon"><path d="M50 10 L80 20 L50 30 Z" fill="white"/></g>
+  <circle cx="20" cy="60" r="8" fill="#FF000080" stroke="black" stroke-width="2"/>
+</svg>)svg";
+
+  Engine::VectorShape shape;
+  Require(shape.LoadFromSvg(svg), "Valid SVG vector shape was rejected.");
+  Require(shape.IsValid() && !shape.IsUploaded(),
+          "CPU-loaded vector shape unexpectedly required a GPU context.");
+  Require(shape.GetViewBoxSize().x == 100.0f &&
+              shape.GetViewBoxSize().y == 80.0f,
+          "Vector shape viewBox was not preserved.");
+  Require(shape.HasGroup("body") && shape.HasGroup("weapon") &&
+              shape.GetTriangleCount() > 2,
+          "Vector shape groups or tessellated geometry were missing.");
+  const auto groups = shape.ResolveGroups(groupNames);
+  const auto group = [&groups](Group value) {
+    return groups[static_cast<std::size_t>(value)];
+  };
+  Require(group(Group::Body).IsValid() && group(Group::Weapon).IsValid(),
+          "Compile-time vector group table did not bind to the SVG.");
+
+  Engine::VectorShapePose pose(shape);
+  Engine::VectorShapeAnimation animation(shape);
+  Engine::VectorShapeTransform start;
+  Engine::VectorShapeTransform end;
+  end.translation = {20.0f, 10.0f};
+  end.rotationDegrees = 90.0f;
+  end.scale = {2.0f, 0.5f};
+  end.opacity = 0.25f;
+  Require(animation.AddKeyframe(group(Group::Weapon), 0.0f, start) &&
+              animation.AddKeyframe(group(Group::Weapon), 2.0f, end),
+          "Resolved vector group ID was rejected by its animation.");
+  Require(animation.Sample(1.0f, false, pose),
+          "Vector animation could not resolve its named group.");
+  Engine::VectorShapeTransform sampled;
+  Require(pose.GetGroupTransform(group(Group::Weapon), sampled) &&
+              std::abs(sampled.translation.x - 10.0f) < 0.001f &&
+              std::abs(sampled.rotationDegrees - 45.0f) < 0.001f &&
+              std::abs(sampled.scale.x - 1.5f) < 0.001f &&
+              std::abs(sampled.opacity - 0.625f) < 0.001f,
+          "Vector animation interpolation was incorrect.");
+  Require(!pose.SetGroupTransform({}, start),
+          "Invalid vector group ID was silently accepted.");
+
+  Engine::VectorShape invalid;
+  Require(!invalid.LoadFromSvg("<svg viewBox=\"0 0 1 1\"><script/></svg>") &&
+              !invalid.GetLastError().empty(),
+          "Unsafe SVG content was not rejected with an error.");
+}
 } // namespace
 
 int main() {
   try {
+    TestVectorShapes();
     Engine::Vector2 position{2.0f, 3.0f};
     position += Engine::Vector2{4.0f, -1.0f};
     const Engine::Vector2 moved = position + Engine::Vector2{1.0f, 2.0f};

@@ -7,6 +7,8 @@
 #include <string_view>
 
 namespace Engine {
+class VectorShape;
+struct VectorShapeDrawParameters;
 class ENGINE_API Renderer2D {
 public:
   void DrawCircle(Vector2 center, float radius, Color color);
@@ -15,6 +17,8 @@ public:
   void DrawText(std::string_view text, Vector2 position, int fontSize,
                 Color color);
   void DrawFramesPerSecond(int x, int y);
+  void DrawVectorShape(const VectorShape &shape,
+                       const VectorShapeDrawParameters &parameters);
 
   [[nodiscard]] int GetWidth() const;
   [[nodiscard]] int GetHeight() const;

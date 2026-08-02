@@ -17,6 +17,7 @@ ENGINE_API ObjectPoolDomain CreateObjectPoolDomain();
 ENGINE_API void DestroyObjectPoolDomain(ObjectPoolDomain domain) noexcept;
 ENGINE_API void SetActiveObjectPoolDomain(ObjectPoolDomain domain);
 ENGINE_API ObjectPoolDomain GetActiveObjectPoolDomain();
+ENGINE_API bool IsObjectPoolDomainAlive(ObjectPoolDomain domain);
 
 class ENGINE_API ObjectPoolDomainScope {
 public:
@@ -48,6 +49,7 @@ struct ObjectPoolStats {
 };
 
 ENGINE_API ObjectPoolStats GetObjectPoolStats(TypeID storageType);
+ENGINE_API ObjectPoolStats GetObjectPoolDomainStats(ObjectPoolDomain domain);
 struct ObjectAllocationInfo {
   std::uint32_t index = 0;
   std::uint32_t version = 0;

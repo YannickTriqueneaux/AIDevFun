@@ -148,6 +148,8 @@ void ReloadableGame::ProcessReloadRequest() {
   }
 
   Engine::GameInstance *previousInstance = Engine::GameInstance::GetInstance();
+  const Engine::Gameplay::ObjectPoolDomain previousDomain =
+      previousInstance ? previousInstance->GetObjectPoolDomain() : 0;
   try {
     const std::vector<std::byte> resumeState =
         loaded_->instance->SaveResumeState();
@@ -168,6 +170,21 @@ void ReloadableGame::ProcessReloadRequest() {
         nextInstance->Activate();
     }
     loaded_ = std::move(next);
+    if (previousDomain != 0 &&
+        Engine::Gameplay::IsObjectPoolDomainAlive(previousDomain)) {
+      std::terminate();
+    }
+    if (nextInstance) {
+      const auto domainStats = Engine::Gameplay::GetObjectPoolDomainStats(
+          nextInstance->GetObjectPoolDomain());
+      const auto liveObjects = nextInstance->GetObjectManager()->LiveCount();
+      if (domainStats.liveObjects != liveObjects)
+        std::terminate();
+      Engine::Logger::Info(
+          "Retired Object pool domain " + std::to_string(previousDomain) +
+          "; resumed " + std::to_string(liveObjects) + " objects in domain " +
+          std::to_string(nextInstance->GetObjectPoolDomain()) + ".");
+    }
     SetReloadStatus("Reloaded Game generation " + std::to_string(generation_) +
                     ".");
     Engine::Logger::Info("Reloaded Game DLL generation " +

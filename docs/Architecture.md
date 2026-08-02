@@ -126,6 +126,28 @@ void MyGame::Shutdown() { shader_.Unload(); }
 Release builds compile these strings into the executable. No shader source file
 needs to be copied beside the final `.exe`.
 
+## Vector shapes
+
+`Engine::VectorShape` loads an embedded deterministic SVG subset into immutable
+meshes. Loading and tessellation are CPU-only; `Upload()` creates GPU resources
+once and `Renderer2D::DrawVectorShape()` draws them by group.
+
+Named SVG groups form a transform hierarchy. `VectorShapePose` stores transient
+per-group translation, rotation, scale, and opacity, while
+`VectorShapeAnimation` samples reusable keyframe tracks. Animation changes
+matrices rather than retessellating paths. Gameplay Components serialize only
+animation identity and playback state, then rebuild transient poses after a
+reload.
+
+Game code declares a shape-specific enum and a constexpr group-name table next
+to each embedded SVG. Names are resolved once after loading into validated
+`VectorShapeGroupID` handles. Animation sampling and rendering use only those
+compact handles and contiguous track arrays; they perform no string lookup.
+
+The supported SVG subset and authoring workflow live in
+`docs/skills/vector-shapes/SKILL.md`. Repository assistants discover that skill
+through `AGENTS.md` and the embedded Assistant skill tools.
+
 ## Codex development control
 
 `Tools/GameDev.ps1` gives external development agents a scriptable control

@@ -24,12 +24,15 @@ private:
   ResolveGameFile(std::string_view relativePath) const;
   [[nodiscard]] std::filesystem::path
   ResolveEngineFile(std::string_view relativePath) const;
+  [[nodiscard]] std::filesystem::path
+  ResolveAgentSkill(std::string_view name) const;
   [[nodiscard]] std::string BuildGame();
   [[nodiscard]] std::string ReadCrashDiagnostics() const;
 
   ReloadableGame *game_ = nullptr;
   std::filesystem::path gameRoot_;
   std::filesystem::path engineRoot_;
+  std::filesystem::path skillsRoot_;
   std::filesystem::path buildDirectory_;
   std::filesystem::path runtimeDirectory_;
   bool recoveryMode_ = false;
