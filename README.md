@@ -8,6 +8,14 @@ change, and keep playing while the assistant edits and rebuilds the game.
 When the result feels right, the same C++ game can be compiled in Release and
 prepared for distribution.
 
+The assistant can create animated vector visuals, procedural sound effects, and
+music as part of the same rapid iteration and hot-reload workflow.
+
+Images can also be pasted directly into the assistant's prompt and used as
+visual references while developing a game.
+
+![A game created from a pasted visual reference](docs/images/pasted-visual-reference-game.png)
+
 > **License notice:** This source-available project is intended for creating
 > free mini-games to enjoy, building proofs of concept, experimenting, and
 > sharing games with friends. Game code and content remain private, while
