@@ -164,7 +164,7 @@ Gameplay lives in a much smaller `Game.dll`:
 - game-specific configuration.
 
 Because the Engine and hosts stay alive, an iteration normally compiles only
-the `Game` CMake target. Whenever possible, the Engine restores the running
+the `Game` target. Whenever possible, the Engine restores the running
 game so play can continue from where it was interrupted, even after the game
 code has changed.
 
@@ -197,13 +197,6 @@ game, or relaunch it unchanged.*
 - **No** relaunches the same game immediately without asking the assistant to
   modify it.
 
-In a non-Release build, every process installs crash hooks that write a `.txt`
-report and a `.dmp` minidump under the runtime `Crashes/` directory. Text
-reports include the process and thread, exception information, and a
-symbolized call stack with module names, functions, source files, and line
-numbers when matching PDB files are available. Process logs are preserved
-across restarts. These crash hooks and the DbgHelp dependency are disabled in
-Release builds.
 
 When AI-assisted recovery is accepted:
 
@@ -217,11 +210,6 @@ When AI-assisted recovery is accepted:
    possible.
 5. Only after a successful build may it call `launch_game`, which returns
    control to Launcher and starts the repaired game.
-
-The automatic recovery request is consumed once. It is not submitted again
-after the repaired game is running, even if deleting its request file fails.
-If the available evidence does not identify a safe repair, the assistant is
-instructed to explain that instead of guessing.
 
 ### Controlled AI tools
 
@@ -251,7 +239,7 @@ build.
 
 ### Persistent conversation
 
-AssistantHost owns the conversation and OpenAI response context. GameHost owns
+AssistantHost owns the conversation and AI response context. GameHost owns
 the playable window and reloadable Game DLL. Recompiling or reloading the Game
 therefore does not erase the active AI discussion.
 
@@ -370,20 +358,6 @@ remain game-specific responsibilities.
 
 Commercial distribution is subject to [LICENSE](LICENSE), including the fixed
 CAD $1.00 royalty for each paid copy sold.
-
-## Logs
-
-Every session writes fresh logs under its own build:
-
-```text
-Games/<game-name>/build/Debug/Logs/Launcher.log
-Games/<game-name>/build/Debug/Logs/GameHost.log
-Games/<game-name>/build/Debug/Logs/AssistantHost.log
-```
-
-Assistant logs contain prompts, response IDs, bounded tool arguments/results,
-and streaming status. GameHost logs contain controlled builds, IPC requests,
-and DLL reload results.
 
 ## License
 
