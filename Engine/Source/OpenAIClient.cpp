@@ -391,6 +391,7 @@ OpenAIClient::EstimateCost(const OpenAITokenUsage &usage) const {
 OpenAIResponse
 OpenAIClient::CreateResponse(std::string_view instructions,
                              std::string_view prompt,
+                             const std::vector<OpenAIImageInput> &images,
                              std::string_view previousResponseId,
                              const OpenAIStreamCallback &onEvent) const {
   if (!IsConfigured()) {
@@ -398,7 +399,17 @@ OpenAIClient::CreateResponse(std::string_view instructions,
         "OpenAI is not configured. Add apiKey and model to settings.json.");
   }
 
-  return SendResponseRequest(settings_, instructions, std::string(prompt),
+  nlohmann::json content = nlohmann::json::array(
+      {{{"type", "input_text"}, {"text", std::string(prompt)}}});
+  for (const OpenAIImageInput &image : images) {
+    content.push_back({{"type", "input_image"},
+                       {"detail", "auto"},
+                       {"image_url", "data:" + image.mimeType + ";base64," +
+                                         image.base64Data}});
+  }
+  nlohmann::json input = nlohmann::json::array(
+      {{{"type", "message"}, {"role", "user"}, {"content", content}}});
+  return SendResponseRequest(settings_, instructions, std::move(input),
                              previousResponseId, onEvent, true);
 }
 

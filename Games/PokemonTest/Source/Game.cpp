@@ -45,18 +45,18 @@ constexpr Engine::Color White{255, 255, 255, 255};
 
 static constexpr std::string_view GroundSvg = R"svg(
 <svg viewBox="0 0 100 100">
-  <g id="base"><rect x="0" y="0" width="100" height="100" fill="#173E31"/></g>
-  <g id="moss"><circle cx="18" cy="22" r="3" fill="#2DD36F" opacity="0.26"/><circle cx="76" cy="64" r="3" fill="#7EE787" opacity="0.22"/><circle cx="42" cy="82" r="2" fill="#B7F7A6" opacity="0.18"/><circle cx="88" cy="18" r="2" fill="#39FFB6" opacity="0.16"/></g>
-  <g id="veins"><line x1="14" y1="68" x2="22" y2="62" stroke="#2DD36F" stroke-width="1" opacity="0.18"/><line x1="58" y1="28" x2="66" y2="22" stroke="#7EE787" stroke-width="1" opacity="0.16"/><line x1="31" y1="43" x2="39" y2="39" stroke="#B7F7A6" stroke-width="1" opacity="0.12"/></g>
+  <g id="base"><rect x="0" y="0" width="100" height="100" fill="#74CFA0"/><rect x="0" y="0" width="100" height="100" fill="#8BDBA8" opacity="0.38"/></g>
+  <g id="moss"><rect x="12" y="18" width="3" height="7" fill="#4EB87D" opacity="0.60"/><rect x="16" y="21" width="3" height="5" fill="#A9E8B8" opacity="0.55"/><rect x="42" y="72" width="4" height="8" fill="#4EB87D" opacity="0.48"/><rect x="78" y="38" width="3" height="7" fill="#A9E8B8" opacity="0.50"/><rect x="66" y="83" width="6" height="3" fill="#5FC98C" opacity="0.45"/></g>
+  <g id="veins"><line x1="8" y1="52" x2="22" y2="52" stroke="#5FC98C" stroke-width="1" opacity="0.22"/><line x1="54" y1="18" x2="66" y2="18" stroke="#BDEFC6" stroke-width="1" opacity="0.18"/><line x1="30" y1="38" x2="40" y2="38" stroke="#5FC98C" stroke-width="1" opacity="0.18"/></g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 3> GroundGroups{"base", "moss", "veins"};
 
 static constexpr std::string_view RoadSvg = R"svg(
 <svg viewBox="0 0 100 24">
-  <g id="pavement"><rect x="0" y="0" width="100" height="24" fill="#2F3040"/><rect x="0" y="4" width="100" height="16" fill="#3B3D4F" opacity="0.82"/></g>
-  <g id="glow"><line x1="0" y1="4" x2="100" y2="4" stroke="#C9D1D9" stroke-width="2" opacity="0.35"/><line x1="0" y1="20" x2="100" y2="20" stroke="#C9D1D9" stroke-width="2" opacity="0.35"/></g>
-  <g id="dash"><line x1="12" y1="12" x2="28" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.75"/><line x1="44" y1="12" x2="56" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.70"/><line x1="72" y1="12" x2="88" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.75"/></g>
+  <g id="pavement"><rect x="0" y="0" width="100" height="24" fill="#8B6F3E"/><rect x="0" y="3" width="100" height="18" fill="#C8A85D"/><rect x="0" y="11" width="100" height="2" fill="#9A7C45" opacity="0.70"/></g>
+  <g id="glow"><line x1="0" y1="3" x2="100" y2="3" stroke="#F1D88A" stroke-width="2" opacity="0.58"/><line x1="0" y1="21" x2="100" y2="21" stroke="#5C4A32" stroke-width="2" opacity="0.72"/></g>
+  <g id="dash"><line x1="16" y1="4" x2="16" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="36" y1="4" x2="36" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="56" y1="4" x2="56" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="76" y1="4" x2="76" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><rect x="8" y="6" width="2" height="2" fill="#FFE9A5"/><rect x="27" y="17" width="2" height="2" fill="#FFE9A5"/><rect x="69" y="7" width="2" height="2" fill="#FFE9A5"/></g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 3> RoadGroups{"pavement", "glow", "dash"};
@@ -92,32 +92,60 @@ static constexpr std::array<std::string_view, 3> FlowerGroups{"stem", "petals", 
 
 static constexpr std::string_view WaterSvg = R"svg(
 <svg viewBox="0 0 100 60">
-  <g id="pool"><rect x="0" y="0" width="100" height="60" fill="#123B73"/><rect x="4" y="4" width="92" height="52" fill="#00A8FF" opacity="0.52"/></g>
-  <g id="waves"><line x1="8" y1="16" x2="92" y2="16" stroke="#B7F7FF" stroke-width="2" opacity="0.75"/><line x1="14" y1="31" x2="86" y2="31" stroke="#B7F7FF" stroke-width="2" opacity="0.55"/><line x1="8" y1="46" x2="92" y2="46" stroke="#B7F7FF" stroke-width="2" opacity="0.68"/></g>
-  <g id="shine"><circle cx="76" cy="12" r="3" fill="#F8F871" opacity="0.85"/><circle cx="34" cy="42" r="2" fill="#F8F871" opacity="0.65"/></g>
+  <g id="pool"><rect x="0" y="0" width="100" height="60" fill="#3F79D1"/><rect x="0" y="0" width="100" height="60" fill="#5B98E1" opacity="0.35"/></g>
+  <g id="waves"><polyline points="2,12 10,7 18,12 26,7 34,12 42,7 50,12 58,7 66,12 74,7 82,12 90,7 98,12" stroke="#73B7E8" stroke-width="2" fill="none" opacity="0.65"/><polyline points="0,30 8,25 16,30 24,25 32,30 40,25 48,30 56,25 64,30 72,25 80,30 88,25 96,30" stroke="#2F6FC5" stroke-width="2" fill="none" opacity="0.38"/><polyline points="2,48 10,43 18,48 26,43 34,48 42,43 50,48 58,43 66,48 74,43 82,48 90,43 98,48" stroke="#73B7E8" stroke-width="2" fill="none" opacity="0.55"/></g>
+  <g id="shine"><rect x="74" y="10" width="4" height="4" fill="#A8DFFF" opacity="0.75"/><rect x="30" y="42" width="3" height="3" fill="#A8DFFF" opacity="0.55"/></g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 3> WaterGroups{"pool", "waves", "shine"};
 
 static constexpr std::string_view TreeSvg = R"svg(
 <svg viewBox="0 0 56 76">
-  <g id="shadow"><ellipse cx="28" cy="70" rx="18" ry="5" fill="#050816" opacity="0.28"/></g>
-  <g id="trunk"><rect x="24" y="38" width="9" height="29" fill="#6B3E3B"/></g>
-  <g id="crown"><circle cx="28" cy="24" r="21" fill="#2DD36F"/><circle cx="16" cy="34" r="15" fill="#39FFB6"/><circle cx="40" cy="34" r="15" fill="#00C781"/></g>
-  <g id="fruit"><circle cx="20" cy="24" r="3" fill="#FF4FD8"/><circle cx="38" cy="19" r="3" fill="#F8F871"/><circle cx="31" cy="40" r="3" fill="#8A5CFF"/></g>
+  <g id="shadow"><ellipse cx="28" cy="70" rx="17" ry="5" fill="#31583D" opacity="0.30"/></g>
+  <g id="trunk"><rect x="22" y="45" width="12" height="21" fill="#5F4631"/><rect x="25" y="45" width="6" height="21" fill="#8B6A42"/></g>
+  <g id="crown"><circle cx="28" cy="21" r="20" fill="#2F7F48"/><circle cx="17" cy="33" r="15" fill="#3E9959"/><circle cx="39" cy="33" r="15" fill="#2D7442"/><circle cx="28" cy="39" r="16" fill="#34894E"/><rect x="17" y="12" width="8" height="5" fill="#BDEFC6" opacity="0.70"/><rect x="8" y="30" width="6" height="4" fill="#8EDC95" opacity="0.62"/><rect x="34" y="22" width="8" height="5" fill="#8EDC95" opacity="0.55"/></g>
+  <g id="fruit"><rect x="18" y="24" width="4" height="4" fill="#D94F45"/><rect x="38" y="19" width="4" height="4" fill="#F4D35E"/><rect x="30" y="42" width="4" height="4" fill="#D94F45"/></g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 4> TreeGroups{"shadow", "trunk", "crown", "fruit"};
 
 static constexpr std::string_view PlayerSvg = R"svg(
 <svg viewBox="0 0 64 80">
-  <g id="shadow"><ellipse cx="32" cy="72" rx="20" ry="6" fill="#050816" opacity="0.38"/></g>
-  <g id="left_leg"><rect x="21" y="49" width="8" height="17" fill="#172554"/></g>
-  <g id="right_leg"><rect x="35" y="49" width="8" height="17" fill="#172554"/></g>
-  <g id="body"><polygon points="18,28 46,28 51,52 13,52" fill="#00E5FF"/><line x1="18" y1="31" x2="46" y2="31" stroke="#F8F871" stroke-width="2" opacity="0.75"/></g>
-  <g id="head"><circle cx="32" cy="20" r="12" fill="#FFD6A5"/></g>
-  <g id="hat"><polygon points="16,16 48,16 40,4 24,4" fill="#FF4FD8"/><rect x="14" y="15" width="36" height="5" fill="#8A5CFF"/></g>
-  <g id="eyes"><circle cx="27" cy="20" r="2" fill="#050816"/><circle cx="37" cy="20" r="2" fill="#050816"/></g>
+  <g id="shadow"><ellipse cx="32" cy="73" rx="15" ry="5" fill="#31583D" opacity="0.32"/></g>
+  <g id="left_leg">
+    <rect x="24" y="55" width="7" height="13" fill="#26334F"/>
+    <rect x="22" y="67" width="10" height="4" fill="#2D2D34"/>
+  </g>
+  <g id="right_leg">
+    <rect x="34" y="55" width="7" height="13" fill="#26334F"/>
+    <rect x="34" y="67" width="10" height="4" fill="#2D2D34"/>
+  </g>
+  <g id="body">
+    <rect x="20" y="36" width="24" height="20" fill="#2D2D34"/>
+    <rect x="22" y="38" width="20" height="16" fill="#5C6FCB"/>
+    <rect x="24" y="38" width="16" height="6" fill="#F4F1E8"/>
+    <rect x="15" y="39" width="7" height="16" fill="#2D2D34"/>
+    <rect x="16" y="41" width="4" height="12" fill="#FFD2A1"/>
+    <rect x="42" y="39" width="7" height="16" fill="#2D2D34"/>
+    <rect x="44" y="41" width="4" height="12" fill="#FFD2A1"/>
+    <rect x="18" y="34" width="7" height="18" fill="#8B4E8E"/>
+  </g>
+  <g id="head">
+    <rect x="22" y="18" width="20" height="18" fill="#2D2D34"/>
+    <rect x="24" y="20" width="16" height="14" fill="#FFD2A1"/>
+    <rect x="27" y="33" width="10" height="3" fill="#E8A06D"/>
+  </g>
+  <g id="hat">
+    <rect x="20" y="12" width="24" height="8" fill="#C63D32"/>
+    <rect x="24" y="8" width="14" height="5" fill="#E65645"/>
+    <rect x="38" y="15" width="7" height="4" fill="#F4F1E8"/>
+    <rect x="18" y="19" width="14" height="4" fill="#C63D32"/>
+  </g>
+  <g id="eyes">
+    <rect x="27" y="25" width="3" height="3" fill="#2D2D34"/>
+    <rect x="35" y="25" width="3" height="3" fill="#2D2D34"/>
+    <rect x="30" y="31" width="5" height="2" fill="#B54A42"/>
+  </g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 7> PlayerGroups{"shadow", "left_leg", "right_leg", "body", "head", "hat", "eyes"};
@@ -126,12 +154,40 @@ enum class PlayerGroup : std::size_t { Shadow, LeftLeg, RightLeg, Body, Head, Ha
 
 static constexpr std::string_view NpcSvg = R"svg(
 <svg viewBox="0 0 64 80">
-  <g id="shadow"><ellipse cx="32" cy="72" rx="18" ry="5" fill="#050816" opacity="0.32"/></g>
-  <g id="legs"><rect x="22" y="50" width="8" height="16" fill="#51344D"/><rect x="34" y="50" width="8" height="16" fill="#51344D"/></g>
-  <g id="body"><rect x="18" y="30" width="28" height="24" fill="#8A5CFF"/><line x1="20" y1="35" x2="44" y2="35" stroke="#00E5FF" stroke-width="2" opacity="0.8"/></g>
-  <g id="head"><circle cx="32" cy="21" r="12" fill="#FFD6A5"/></g>
-  <g id="hair"><polygon points="20,17 26,8 44,13 43,20 32,14" fill="#51344D"/></g>
-  <g id="eyes"><circle cx="27" cy="21" r="2" fill="#050816"/><circle cx="37" cy="21" r="2" fill="#050816"/></g>
+  <g id="shadow"><ellipse cx="32" cy="73" rx="16" ry="5" fill="#050816" opacity="0.26"/></g>
+  <g id="legs">
+    <rect x="23" y="55" width="7" height="13" fill="#050816"/>
+    <rect x="24" y="55" width="5" height="11" fill="#FFD2A1"/>
+    <rect x="34" y="55" width="7" height="13" fill="#050816"/>
+    <rect x="35" y="55" width="5" height="11" fill="#FFD2A1"/>
+    <rect x="20" y="67" width="11" height="4" fill="#050816"/>
+    <rect x="33" y="67" width="11" height="4" fill="#050816"/>
+  </g>
+  <g id="body">
+    <rect x="18" y="33" width="28" height="24" fill="#050816"/>
+    <rect x="20" y="35" width="24" height="20" fill="#FF6BCB"/>
+    <rect x="24" y="39" width="16" height="4" fill="#F8F8F0"/>
+    <rect x="15" y="36" width="6" height="17" fill="#050816"/>
+    <rect x="16" y="38" width="4" height="13" fill="#FFD2A1"/>
+    <rect x="43" y="36" width="6" height="17" fill="#050816"/>
+    <rect x="44" y="38" width="4" height="13" fill="#FFD2A1"/>
+  </g>
+  <g id="head">
+    <rect x="21" y="13" width="22" height="21" fill="#050816"/>
+    <rect x="24" y="17" width="16" height="15" fill="#FFD2A1"/>
+    <rect x="27" y="31" width="10" height="3" fill="#E8A06D"/>
+  </g>
+  <g id="hair">
+    <rect x="19" y="10" width="24" height="9" fill="#050816"/>
+    <rect x="17" y="18" width="8" height="12" fill="#050816"/>
+    <rect x="39" y="18" width="8" height="12" fill="#050816"/>
+    <rect x="28" y="8" width="8" height="4" fill="#050816"/>
+  </g>
+  <g id="eyes">
+    <rect x="27" y="22" width="3" height="3" fill="#050816"/>
+    <rect x="35" y="22" width="3" height="3" fill="#050816"/>
+    <rect x="30" y="28" width="5" height="2" fill="#D94F45"/>
+  </g>
 </svg>
 )svg";
 static constexpr std::array<std::string_view, 6> NpcGroups{"shadow", "legs", "body", "head", "hair", "eyes"};
@@ -923,8 +979,7 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
       art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Head), head);
       art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Eyes), head);
       DrawVectorArt(renderer, art.npc, screen, {48.0f, 60.0f},
-                    art.npcPose.get(), 0.0f,
-                    {npc.clothes.red, npc.clothes.green, npc.clothes.blue, 255});
+                    art.npcPose.get(), 0.0f, White);
     }
     if (!nearbyNpc &&
         DistanceSquared(playerPosition, npc.position) <= 72.0f * 72.0f)
@@ -964,7 +1019,7 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
                                       head);
     const float facingRotation = std::atan2(facing.y, facing.x) * 57.2957795f - 90.0f;
     DrawVectorArt(renderer, art.player, WorldToScreen(playerPosition, camera),
-                  {58.0f, 72.0f}, art.playerPose.get(), facingRotation * 0.08f);
+                  {44.0f, 56.0f}, art.playerPose.get(), facingRotation * 0.03f);
   }
 
   std::size_t entityCount = 0;
@@ -977,7 +1032,7 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
   renderer.DrawText("NEON SVG RPG - WASD / FLECHES POUR MARCHER",
                     {24.0f, 24.0f}, 20, {235, 245, 210, 255});
   renderer.DrawText(
-      "Decor plus lisible: routes fixes, herbe ancree au monde, PNJ SVG",
+      "DA plus proche RPG 16-bit: herbe claire, eau ondulee, passerelles",
       {24.0f, 48.0f}, 18, {125, 231, 255, 255});
   renderer.DrawText("Entities: " + std::to_string(entityCount) + "   PNJ: 4",
                     {24.0f, 70.0f}, 18, {245, 245, 210, 255});

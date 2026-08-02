@@ -33,10 +33,12 @@ private:
   void PollPendingRequest();
   void PollStreamEvents();
   void PollAutomaticPrompt();
+  void PasteClipboardImage();
 
   std::vector<PromptMessage> messages_;
   std::vector<std::string> activityLogs_;
   std::string promptInput_;
+  std::vector<OpenAIImageInput> promptImages_;
   PromptProcessor processor_;
   PromptConsoleOptions options_;
   std::future<PromptProcessResult> pendingRequest_;

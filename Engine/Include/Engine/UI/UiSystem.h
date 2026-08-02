@@ -35,6 +35,7 @@ public:
 
   [[nodiscard]] bool InputText(std::string_view label, std::string_view hint,
                                std::string &value, bool submitOnEnter = true);
+  [[nodiscard]] bool IsPasteShortcutPressed() const;
 
   void Text(std::string_view text, Color color);
   void TextWrapped(std::string_view text, float wrapWidth, Color color);

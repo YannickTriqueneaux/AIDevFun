@@ -40,6 +40,13 @@ struct OpenAIToolOutput {
   std::string output;
 };
 
+struct OpenAIImageInput {
+  std::string mimeType;
+  std::string base64Data;
+  int width = 0;
+  int height = 0;
+};
+
 class OpenAIClient {
 public:
   explicit OpenAIClient(OpenAISettings settings);
@@ -50,6 +57,7 @@ public:
   EstimateCost(const OpenAITokenUsage &usage) const;
   [[nodiscard]] OpenAIResponse
   CreateResponse(std::string_view instructions, std::string_view prompt,
+                 const std::vector<OpenAIImageInput> &images,
                  std::string_view previousResponseId,
                  const OpenAIStreamCallback &onEvent) const;
   [[nodiscard]] OpenAIResponse

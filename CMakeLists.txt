@@ -96,6 +96,7 @@ target_link_libraries(EngineImGui PUBLIC raylib)
 
 add_library(Engine SHARED
     Engine/Source/Application.cpp
+    Engine/Source/ProceduralAudio.cpp
     Engine/Source/AssistantApplication.cpp
     Engine/Source/CrashDiagnostics.cpp
     Engine/Source/DynamicLibrary.cpp
@@ -194,6 +195,7 @@ endif()
 add_executable(GameRelease WIN32
     GameHost/Source/ReleaseMain.cpp
     Engine/Source/Application.cpp
+    Engine/Source/ProceduralAudio.cpp
     Engine/Source/CrashDiagnostics.cpp
     Engine/Source/GameInstance.cpp
     Engine/Source/InputSystem.cpp

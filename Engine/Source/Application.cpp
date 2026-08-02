@@ -22,13 +22,18 @@ Application::Application(ApplicationConfig config)
 
   InitWindow(config_.windowWidth, config_.windowHeight,
              config_.windowTitle.c_str());
+  InitAudioDevice();
 
 #if defined(NDEBUG)
   SetTargetFPS(config_.targetFramesPerSecond);
 #endif
 }
 
-Application::~Application() { CloseWindow(); }
+Application::~Application() {
+  if (IsAudioDeviceReady())
+    CloseAudioDevice();
+  CloseWindow();
+}
 
 void Application::Run(GameInterface &game) {
   InputSystem input;

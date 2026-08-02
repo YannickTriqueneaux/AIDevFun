@@ -1,4 +1,5 @@
 #include "Engine/Application/GameInstance.h"
+#include "Engine/Audio/ProceduralAudio.h"
 #include "Engine/Core/Memory.h"
 #include "Engine/Gameplay/World.h"
 #include "Engine/Graphics/Color.h"
@@ -242,10 +243,87 @@ void TestVectorShapes() {
               !invalid.GetLastError().empty(),
           "Unsafe SVG content was not rejected with an error.");
 }
+
+void TestProceduralAudio() {
+  static constexpr std::array pitch{Engine::AudioEnvelopePoint{0.0f, 1.0f},
+                                    Engine::AudioEnvelopePoint{0.2f, 0.25f}};
+  static constexpr std::array voices{
+      Engine::ProceduralSoundVoice{
+          .waveform = Engine::AudioWaveform::Square,
+          .frequencyHz = 880.0f,
+          .volume = 0.65f,
+          .pan = 0.35f,
+          .dutyCycle = 0.35f,
+          .envelope = {.attackSeconds = 0.005f,
+                       .decaySeconds = 0.04f,
+                       .sustainLevel = 0.55f,
+                       .releaseSeconds = 0.05f},
+          .frequencyMultiplier = {.points = pitch, .defaultValue = 1.0f},
+          .vibratoFrequencyHz = 8.0f,
+          .vibratoDepthCents = 14.0f,
+          .filter = Engine::AudioFilterType::LowPass,
+          .filterCutoffHz = 4'500.0f},
+      Engine::ProceduralSoundVoice{.waveform = Engine::AudioWaveform::Noise,
+                                   .frequencyHz = 120.0f,
+                                   .volume = 0.12f,
+                                   .pan = 0.65f,
+                                   .envelope = {.attackSeconds = 0.0f,
+                                                .decaySeconds = 0.03f,
+                                                .sustainLevel = 0.2f,
+                                                .releaseSeconds = 0.08f},
+                                   .filter = Engine::AudioFilterType::HighPass,
+                                   .filterCutoffHz = 700.0f,
+                                   .noiseSeed = 42}};
+  static constexpr Engine::ProceduralSoundDefinition soundDefinition{
+      .durationSeconds = 0.2f,
+      .sampleRate = 22'050,
+      .masterVolume = 0.8f,
+      .voices = voices,
+      .effects = {
+          .echoDelaySeconds = 0.04f, .echoFeedback = 0.2f, .echoMix = 0.15f}};
+
+  Engine::ProceduralSound first;
+  Engine::ProceduralSound second;
+  Require(first.Build(soundDefinition) && second.Build(soundDefinition),
+          "Procedural sound definition did not build.");
+  Require(!first.IsUploaded(),
+          "Headless procedural sound unexpectedly touched the audio device.");
+  Require(first.GetSampleCount() == 4'410 &&
+              std::abs(first.GetDuration() - 0.2f) < 0.001f,
+          "Procedural sound duration or sample count was incorrect.");
+  Require(first.GetPeakAmplitude() > 0.05f && first.GetPeakAmplitude() <= 1.0f,
+          "Procedural sound produced invalid amplitude.");
+  Require(first.GetPcmHash() != 0 && first.GetPcmHash() == second.GetPcmHash(),
+          "Procedural synthesis was not deterministic.");
+
+  static constexpr std::array notes{
+      Engine::ProceduralMusicNote{0.0f, 0.5f, 60, 1.0f},
+      Engine::ProceduralMusicNote{0.5f, 0.5f, 64, 0.8f},
+      Engine::ProceduralMusicNote{1.0f, 1.0f, 67, 0.9f}};
+  static constexpr std::array tracks{
+      Engine::ProceduralMusicTrack{.instrument = &soundDefinition,
+                                   .notes = notes,
+                                   .volume = 0.7f,
+                                   .pan = 0.5f}};
+  static constexpr Engine::ProceduralMusicDefinition musicDefinition{
+      .tempoBeatsPerMinute = 120.0f,
+      .lengthBeats = 2.0f,
+      .sampleRate = 22'050,
+      .masterVolume = 0.7f,
+      .tracks = tracks,
+      .effects = {
+          .reverbSeconds = 0.08f, .reverbDecay = 0.25f, .reverbMix = 0.1f}};
+  Engine::ProceduralMusic music;
+  Require(music.Build(musicDefinition) && music.GetSampleCount() == 22'050 &&
+              std::abs(music.GetDuration() - 1.0f) < 0.001f &&
+              music.GetPcmHash() != 0,
+          "Procedural music sequence did not render deterministically.");
+}
 } // namespace
 
 int main() {
   try {
+    TestProceduralAudio();
     TestVectorShapes();
     Engine::Vector2 position{2.0f, 3.0f};
     position += Engine::Vector2{4.0f, -1.0f};

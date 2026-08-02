@@ -23,7 +23,8 @@ public:
   [[nodiscard]] bool IsConfigured() const;
   [[nodiscard]] const std::string &GetModel() const;
   [[nodiscard]] PromptProcessResult
-  Process(std::string_view prompt, const OpenAIStreamCallback &onEvent);
+  Process(std::string_view prompt, const std::vector<OpenAIImageInput> &images,
+          const OpenAIStreamCallback &onEvent);
 
 private:
   OpenAIClient client_;

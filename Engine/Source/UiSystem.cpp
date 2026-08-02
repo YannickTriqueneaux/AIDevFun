@@ -94,6 +94,12 @@ bool UiSystem::InputText(std::string_view label, std::string_view hint,
                                   terminatedHint.c_str(), &value, flags);
 }
 
+bool UiSystem::IsPasteShortcutPressed() const {
+  const ImGuiIO &io = ImGui::GetIO();
+  return ImGui::IsItemActive() && io.KeyCtrl &&
+         ImGui::IsKeyPressed(ImGuiKey_V, false);
+}
+
 void UiSystem::Text(std::string_view text, Color color) {
   ImGui::PushStyleColor(ImGuiCol_Text, ToImGuiColor(color));
   ImGui::TextUnformatted(text.data(), text.data() + text.size());

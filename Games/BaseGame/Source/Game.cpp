@@ -21,6 +21,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -36,6 +37,60 @@ constexpr float EnemyRadius = 17.0f;
 constexpr float ProjectileRadius = 4.0f;
 constexpr std::size_t MaximumEnemies = 288;
 constexpr int PlayerMaxHealth = 20;
+
+constexpr std::array PlayerShotPitch{Engine::AudioEnvelopePoint{0.0f, 1.0f},
+                                     Engine::AudioEnvelopePoint{0.14f, 0.24f}};
+constexpr std::array PlayerShotVoices{Engine::ProceduralSoundVoice{
+    .waveform = Engine::AudioWaveform::Square,
+    .frequencyHz = 980.0f,
+    .volume = 0.55f,
+    .dutyCycle = 0.3f,
+    .envelope = {.attackSeconds = 0.002f,
+                 .decaySeconds = 0.025f,
+                 .sustainLevel = 0.5f,
+                 .releaseSeconds = 0.035f},
+    .frequencyMultiplier = {.points = PlayerShotPitch},
+    .filter = Engine::AudioFilterType::LowPass,
+    .filterCutoffHz = 7'000.0f}};
+constexpr Engine::ProceduralSoundDefinition PlayerShotPatch{
+    .durationSeconds = 0.14f, .voices = PlayerShotVoices};
+
+constexpr std::array EnemyShotPitch{Engine::AudioEnvelopePoint{0.0f, 1.0f},
+                                    Engine::AudioEnvelopePoint{0.2f, 0.55f}};
+constexpr std::array EnemyShotVoices{Engine::ProceduralSoundVoice{
+    .waveform = Engine::AudioWaveform::Saw,
+    .frequencyHz = 310.0f,
+    .volume = 0.42f,
+    .envelope = {.attackSeconds = 0.006f,
+                 .decaySeconds = 0.04f,
+                 .sustainLevel = 0.45f,
+                 .releaseSeconds = 0.06f},
+    .frequencyMultiplier = {.points = EnemyShotPitch},
+    .filter = Engine::AudioFilterType::LowPass,
+    .filterCutoffHz = 3'200.0f}};
+constexpr Engine::ProceduralSoundDefinition EnemyShotPatch{
+    .durationSeconds = 0.2f, .voices = EnemyShotVoices};
+
+constexpr std::array ImpactVoices{
+    Engine::ProceduralSoundVoice{.waveform = Engine::AudioWaveform::Noise,
+                                 .frequencyHz = 120.0f,
+                                 .volume = 0.42f,
+                                 .envelope = {.attackSeconds = 0.0f,
+                                              .decaySeconds = 0.025f,
+                                              .sustainLevel = 0.15f,
+                                              .releaseSeconds = 0.07f},
+                                 .filter = Engine::AudioFilterType::HighPass,
+                                 .filterCutoffHz = 650.0f,
+                                 .noiseSeed = 0x51f15eU},
+    Engine::ProceduralSoundVoice{.waveform = Engine::AudioWaveform::Triangle,
+                                 .frequencyHz = 95.0f,
+                                 .volume = 0.3f,
+                                 .envelope = {.attackSeconds = 0.0f,
+                                              .decaySeconds = 0.02f,
+                                              .sustainLevel = 0.2f,
+                                              .releaseSeconds = 0.08f}}};
+constexpr Engine::ProceduralSoundDefinition ImpactPatch{.durationSeconds = 0.1f,
+                                                        .voices = ImpactVoices};
 
 float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
   const float x = left.x - right.x;
@@ -130,6 +185,21 @@ void DrawHealthBar(Engine::Renderer2D &renderer, Engine::Vector2 center,
 ProceduralGame::ProceduralGame() : world_(*gameInstance_.GetWorld()) {
   RegisterGameplayTypes();
   EnsureCoreEntities();
+}
+
+void ProceduralGame::Initialize() {
+  static_cast<void>(playerShotSound_.Build(PlayerShotPatch));
+  static_cast<void>(enemyShotSound_.Build(EnemyShotPatch));
+  static_cast<void>(impactSound_.Build(ImpactPatch));
+  static_cast<void>(playerShotSound_.Upload());
+  static_cast<void>(enemyShotSound_.Upload());
+  static_cast<void>(impactSound_.Upload());
+}
+
+void ProceduralGame::Shutdown() {
+  impactSound_.Unload();
+  enemyShotSound_.Unload();
+  playerShotSound_.Unload();
 }
 
 void ProceduralGame::RegisterGameplayTypes() {
@@ -295,6 +365,7 @@ void ProceduralGame::ProcessFrameRequests() {
       (void)SpawnProjectile(BaseGame::PlayerProjectileEntityType,
                             player->transform.position + direction * 17.0f,
                             direction, BaseGame::Faction::Player);
+      playerShotSound_.Play(0.75f, 0.96f + direction.x * 0.04f, 0.5f);
     }
   }
 
@@ -309,6 +380,7 @@ void ProceduralGame::ProcessFrameRequests() {
       (void)SpawnProjectile(BaseGame::EnemyProjectileEntityType,
                             entity->transform.position + direction * 22.0f,
                             direction, BaseGame::Faction::Enemy);
+      enemyShotSound_.Play(0.45f, 0.92f + direction.y * 0.05f, 0.5f);
     }
   }
 }
@@ -357,6 +429,7 @@ void ProceduralGame::ProcessCollisionsAndLifetime() {
                           targetEntity->transform.position) <=
           hitRadius * hitRadius) {
         target.health->Damage(damage->DamageAmount());
+        impactSound_.Play(0.55f, 0.95f, 0.5f);
         destroyProjectile = true;
       }
     }

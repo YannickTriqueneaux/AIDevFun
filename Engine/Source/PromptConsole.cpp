@@ -4,6 +4,8 @@
 
 #include "Engine/Core/Logger.h"
 
+#include "raylib.h"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -23,6 +25,26 @@ constexpr float MessageWidthRatio = 0.78f;
 constexpr Engine::Color UserColor{110, 190, 255, 255};
 constexpr Engine::Color ResultColor{235, 235, 235, 255};
 constexpr Engine::Color InformationColor{145, 150, 165, 255};
+constexpr std::size_t MaximumPromptImages = 4;
+constexpr int MaximumImageDimension = 2048;
+
+std::string EncodeBase64(const unsigned char *data, std::size_t size) {
+  static constexpr char Alphabet[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string result;
+  result.reserve(((size + 2) / 3) * 4);
+  for (std::size_t offset = 0; offset < size; offset += 3) {
+    const std::uint32_t first = data[offset];
+    const std::uint32_t second = offset + 1 < size ? data[offset + 1] : 0;
+    const std::uint32_t third = offset + 2 < size ? data[offset + 2] : 0;
+    const std::uint32_t value = (first << 16) | (second << 8) | third;
+    result.push_back(Alphabet[(value >> 18) & 63]);
+    result.push_back(Alphabet[(value >> 12) & 63]);
+    result.push_back(offset + 1 < size ? Alphabet[(value >> 6) & 63] : '=');
+    result.push_back(offset + 2 < size ? Alphabet[value & 63] : '=');
+  }
+  return result;
+}
 
 std::string FormatTokens(std::uint64_t tokens) {
   std::string digits = std::to_string(tokens);
@@ -122,7 +144,13 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
     ui.Text("Conversation", {210, 215, 225, 255});
     ui.Separator();
 
-    const float inputAreaHeight = ui.GetInputHeight() + 8.0f;
+    const float attachmentHeight =
+        promptImages_.empty()
+            ? 0.0f
+            : ui.GetInputHeight() *
+                  static_cast<float>(promptImages_.size() * 2);
+    const float inputAreaHeight =
+        ui.GetInputHeight() * 2.0f + attachmentHeight + 12.0f;
     if (ui.BeginChild("PromptHistory", {0.0f, -inputAreaHeight}, false)) {
       for (const PromptMessage &message : messages_) {
         const float availableWidth = ui.GetAvailableWidth();
@@ -158,8 +186,32 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
       focusInput_ = false;
     }
 
-    if (ui.InputText("##PromptInput", "Type a prompt and press Enter...",
-                     promptInput_)) {
+    if (ui.Button("Paste image", {110.0f, 0.0f})) {
+      PasteClipboardImage();
+    }
+    for (std::size_t index = 0; index < promptImages_.size();) {
+      const OpenAIImageInput &image = promptImages_[index];
+      ui.Text("Image " + std::to_string(index + 1) + " - " +
+                  std::to_string(image.width) + "x" +
+                  std::to_string(image.height),
+              InformationColor);
+      const std::string removeLabel =
+          "Remove image " + std::to_string(index + 1) + "##PromptImage";
+      if (ui.Button(removeLabel, {130.0f, 0.0f})) {
+        promptImages_.erase(promptImages_.begin() +
+                            static_cast<std::ptrdiff_t>(index));
+      } else {
+        ++index;
+      }
+    }
+
+    const bool submitted = ui.InputText(
+        "##PromptInput", "Type a prompt, paste an image, and press Enter...",
+        promptInput_);
+    if (ui.IsPasteShortcutPressed()) {
+      PasteClipboardImage();
+    }
+    if (submitted) {
       SubmitPrompt();
     }
   }
@@ -198,6 +250,59 @@ void PromptConsole::PollAutomaticPrompt() {
   SubmitPrompt();
 }
 
+void PromptConsole::PasteClipboardImage() {
+  if (pendingRequest_.valid()) {
+    activityLogs_.push_back(
+        "Wait for the current response before attaching an image.");
+    return;
+  }
+  if (promptImages_.size() >= MaximumPromptImages) {
+    activityLogs_.push_back("A prompt can contain at most four images.");
+    return;
+  }
+
+  Image image = GetClipboardImage();
+  if (image.data == nullptr || image.width <= 0 || image.height <= 0) {
+    activityLogs_.push_back("The clipboard does not contain an image.");
+    return;
+  }
+
+  const int originalWidth = image.width;
+  const int originalHeight = image.height;
+  if (image.width > MaximumImageDimension ||
+      image.height > MaximumImageDimension) {
+    const float scale = static_cast<float>(MaximumImageDimension) /
+                        static_cast<float>(std::max(image.width, image.height));
+    ImageResize(&image, std::max(1, static_cast<int>(image.width * scale)),
+                std::max(1, static_cast<int>(image.height * scale)));
+  }
+
+  int pngSize = 0;
+  unsigned char *png = ExportImageToMemory(image, ".png", &pngSize);
+  UnloadImage(image);
+  if (png == nullptr || pngSize <= 0) {
+    if (png != nullptr)
+      MemFree(png);
+    activityLogs_.push_back("Could not encode the clipboard image.");
+    return;
+  }
+
+  promptImages_.push_back(
+      {.mimeType = "image/png",
+       .base64Data = EncodeBase64(png, static_cast<std::size_t>(pngSize)),
+       .width = image.width,
+       .height = image.height});
+  MemFree(png);
+  activityLogs_.push_back("Attached clipboard image " +
+                          std::to_string(originalWidth) + "x" +
+                          std::to_string(originalHeight) +
+                          (originalWidth != promptImages_.back().width ||
+                                   originalHeight != promptImages_.back().height
+                               ? " (resized for upload)."
+                               : "."));
+  scrollToLatest_ = true;
+}
+
 void PromptConsole::SubmitPrompt() {
   if (pendingRequest_.valid()) {
     messages_.push_back(
@@ -208,24 +313,32 @@ void PromptConsole::SubmitPrompt() {
   }
 
   const auto firstContent = promptInput_.find_first_not_of(" \t\r\n");
-  if (firstContent == std::string::npos) {
+  if (firstContent == std::string::npos && promptImages_.empty()) {
     return;
   }
 
-  const auto lastContent = promptInput_.find_last_not_of(" \t\r\n");
-  std::string prompt =
-      promptInput_.substr(firstContent, lastContent - firstContent + 1);
+  std::string prompt = "Use the attached image as a visual reference.";
+  if (firstContent != std::string::npos) {
+    const auto lastContent = promptInput_.find_last_not_of(" \t\r\n");
+    prompt = promptInput_.substr(firstContent, lastContent - firstContent + 1);
+  }
+  auto images = std::move(promptImages_);
 
   Logger::Info("User prompt submitted:\n" +
                prompt.substr(0, std::min<std::size_t>(prompt.size(), 4'000)));
-  messages_.push_back({PromptMessageRole::User, prompt});
+  const std::string attachmentSummary =
+      images.empty()
+          ? ""
+          : "\n[" + std::to_string(images.size()) + " image(s) attached]";
+  messages_.push_back({PromptMessageRole::User, prompt + attachmentSummary});
   activityLogs_.push_back("Request queued.");
   activeResponseIndex_.reset();
   activeReasoningLogIndex_.reset();
 
   pendingRequest_ =
-      std::async(std::launch::async, [this, prompt = std::move(prompt)]() {
-        return processor_.Process(prompt,
+      std::async(std::launch::async, [this, prompt = std::move(prompt),
+                                      images = std::move(images)]() {
+        return processor_.Process(prompt, images,
                                   [this](const OpenAIStreamEvent &event) {
                                     std::scoped_lock lock(streamEventsMutex_);
                                     pendingStreamEvents_.push_back(event);
@@ -233,6 +346,7 @@ void PromptConsole::SubmitPrompt() {
       });
 
   promptInput_.clear();
+  promptImages_.clear();
   scrollToLatest_ = true;
   focusInput_ = true;
 }

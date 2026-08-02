@@ -59,6 +59,7 @@ const std::string &PromptProcessor::GetModel() const {
 
 PromptProcessResult
 PromptProcessor::Process(std::string_view prompt,
+                         const std::vector<OpenAIImageInput> &images,
                          const OpenAIStreamCallback &onEvent) {
   PromptProcessResult processResult;
   const auto accountForResponse = [this, &processResult](
@@ -76,8 +77,9 @@ PromptProcessor::Process(std::string_view prompt,
   try {
     Logger::Info("Starting OpenAI response. Previous response ID present: " +
                  std::string(previousResponseId_.empty() ? "no." : "yes."));
-    OpenAIResponse response = client_.CreateResponse(
-        GameDeveloperInstructions, prompt, previousResponseId_, onEvent);
+    OpenAIResponse response =
+        client_.CreateResponse(GameDeveloperInstructions, prompt, images,
+                               previousResponseId_, onEvent);
     accountForResponse(response);
 
     for (int round = 0;

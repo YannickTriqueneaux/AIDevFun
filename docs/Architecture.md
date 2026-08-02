@@ -148,6 +148,24 @@ The supported SVG subset and authoring workflow live in
 `docs/skills/vector-shapes/SKILL.md`. Repository assistants discover that skill
 through `AGENTS.md` and the embedded Assistant skill tools.
 
+## Procedural audio
+
+`Engine::ProceduralSound` turns declarative oscillator patches into immutable
+stereo PCM during initialization and uploads them to the audio backend once.
+Patches support deterministic noise, arbitrary envelopes, ADSR, vibrato,
+tremolo, pan, low/high-pass filtering, echo, and compact reverb. Triggering a
+sound during gameplay performs no synthesis.
+
+`Engine::ProceduralMusic` renders beat-based note tracks from the same patches
+and exposes streamed loop, pause, seek, volume, pitch, and pan controls. The
+Application owns the audio-device lifetime. Game shutdown releases audio
+resources before the Application closes the device.
+
+Patches, scores, PCM, and backend handles are transient. Resumable Components
+store stable music identity and playback controls/time, then rebuild the
+resource and seek after reload. Authoring rules and sound recipes live in
+`docs/skills/procedural-audio/SKILL.md`.
+
 ## Codex development control
 
 `Tools/GameDev.ps1` gives external development agents a scriptable control
