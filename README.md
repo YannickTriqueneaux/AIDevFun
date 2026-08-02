@@ -19,16 +19,6 @@ visual references while developing a game.
 
 ![A game created from a pasted visual reference](docs/images/pasted-visual-reference-game.png)
 
-> **License notice:** This source-available project is intended for creating
-> free mini-games to enjoy, building proofs of concept, experimenting, and
-> sharing games with friends. Game code and content remain private, while
-> infrastructure changes outside `Games/` must be shared with the repository
-> owner. No royalty is due for copies shared entirely free of charge. When a
-> game is used commercially or sold to players, the commercial terms apply,
-> including a fixed royalty of CAD $1.00 per paid copy. Read
-> [LICENSE](LICENSE) and [CONTRIBUTING.md](CONTRIBUTING.md) before using the
-> project.
-
 ![A Snake mini-game running beside its AI development assistant](docs/images/game-and-ai-assistant.png)
 
 *A game created and hot-reloaded from the assistant while the playable session
