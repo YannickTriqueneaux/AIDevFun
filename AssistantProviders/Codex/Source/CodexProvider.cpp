@@ -113,7 +113,17 @@ public:
                 "Game and Engine inspection, searches, file changes, builds, "
                 "reloads, and crash recovery. Do not use a shell or direct "
                 "filesystem tools. Use tool discovery to find the required "
-                "game_tools MCP operations before calling them.\n\n"
+                "game_tools MCP operations before calling them. Before any "
+                "implementation, call list_agent_skills and read every "
+                "applicable skill. If none applies, call "
+                "confirm_no_applicable_skills with a concrete reason. Then "
+                "call list_agent_documents and read "
+                "Architecture.md. Read AIProviders.md for provider work. "
+                "Prefer cohesive design over minimizing file or type count. "
+                "Create new Game files, EntityTypes, and focused "
+                "ComponentTypes whenever a concept has its own lifecycle, "
+                "state, behavior, or resume boundary; do not accumulate "
+                "unrelated features in existing catch-all files.\n\n"
              << prompt;
     }
     std::vector<std::filesystem::path> imagePaths;

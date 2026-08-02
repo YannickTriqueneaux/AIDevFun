@@ -34,18 +34,44 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(sandbox / "Repository" / "Engine");
     std::filesystem::create_directories(sandbox / "Repository" / "docs" /
                                         "skills");
+    std::filesystem::create_directories(sandbox / "Repository" / "docs" /
+                                        "skills" / "test-skill");
     std::filesystem::create_directories(root / "build");
     std::filesystem::create_directories(root / "runtime");
     {
       std::ofstream(root / "Source" / "Legacy.hpp") << "#pragma once\n";
+      std::ofstream(sandbox / "Repository" / "docs" / "Architecture.md")
+          << "# Architecture\n";
+      std::ofstream(sandbox / "Repository" / "docs" / "skills" / "test-skill" /
+                    "SKILL.md")
+          << "---\nname: test-skill\ndescription: Test guidance.\n---\n";
     }
 
     GameToolService service(nullptr, root, root / "build", root / "runtime");
+    auto response = Request(service, "list_agent_documents", {});
+    Require(response.at("ok") && response["result"]["documents"].size() == 1,
+            "Agent documents were not listed.");
+    response =
+        Request(service, "read_agent_document", {{"name", "Architecture.md"}});
+    if (!response.at("ok"))
+      throw std::runtime_error("Agent document was not read: " +
+                               response.dump());
+    Require(response["result"]["content"].get<std::string>().find(
+                "# Architecture") != std::string::npos,
+            "Agent document content was incorrect.");
+    response =
+        Request(service, "read_agent_document", {{"name", "../AGENTS.md"}});
+    Require(!response.at("ok"), "Agent document traversal was accepted.");
+    response = Request(service, "list_agent_skills", {});
+    Require(response.at("ok") && response["result"]["skills"].size() == 1,
+            "Agent skills were not listed.");
+    response = Request(service, "read_agent_skill", {{"name", "test-skill"}});
+    Require(response.at("ok"), "Agent skill was not read.");
+
     const std::string validCode =
         "#pragma once\n\nnamespace Test {\nstruct Widget {};\n}\n";
-    auto response =
-        Request(service, "create_game_code_file",
-                {{"path", "Source/Widget.h"}, {"content", validCode}});
+    response = Request(service, "create_game_code_file",
+                       {{"path", "Source/Widget.h"}, {"content", validCode}});
     Require(response.at("ok") &&
                 std::filesystem::is_regular_file(root / "Source" / "Widget.h"),
             "Valid Game header was not created.");

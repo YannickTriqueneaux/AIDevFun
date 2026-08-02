@@ -64,6 +64,14 @@ defer custom MCP tools until the model searches for a relevant operation. Each
 tool also declares MCP safety annotations, allowing read-only operations and
 controlled Game mutations to be handled according to their actual effects.
 
+The MCP bridge exposes repository skills and top-level agent documents as
+read-only tools. Before it permits a Game mutation, build, reload, or recovery
+launch, Codex must have listed the available skills and read
+at least one applicable skill plus `docs/Architecture.md`. When none of the
+listed skills applies, Codex must explicitly record that decision and its
+reason through `confirm_no_applicable_skills`. Provider instructions require
+reading every applicable skill and `docs/AIProviders.md` for provider work.
+
 The provider parses the JSON Lines stream from `codex exec --json` while Codex
 is running. Commands, file changes, tool calls, searches, reasoning summaries,
 completion status, and token usage are converted into the generic provider

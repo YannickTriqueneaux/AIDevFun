@@ -259,6 +259,8 @@ GameToolService::GameToolService(ReloadableGame *game,
           gameRoot_.parent_path().parent_path() / "Engine")),
       skillsRoot_(std::filesystem::weakly_canonical(
           gameRoot_.parent_path().parent_path() / "docs" / "skills")),
+      documentsRoot_(std::filesystem::weakly_canonical(
+          gameRoot_.parent_path().parent_path() / "docs")),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
       recoveryMode_(recoveryMode), server_(Development::GetGameToolsPipeName(),
@@ -317,6 +319,26 @@ std::string GameToolService::HandleRequest(std::string_view request) {
       const std::filesystem::path file =
           ResolveAgentSkill(arguments.at("name").get<std::string>());
       result = {{"name", file.parent_path().filename().string()},
+                {"content", ReadTextFile(file)},
+                {"readOnly", true}};
+    } else if (command == "confirm_no_applicable_skills") {
+      const std::string reason = arguments.at("reason").get<std::string>();
+      if (reason.size() < 12)
+        throw std::runtime_error("A concrete skill-review reason is required.");
+      result = {{"reviewed", true}, {"reason", reason}, {"readOnly", true}};
+    } else if (command == "list_agent_documents") {
+      std::vector<std::string> documentNames;
+      for (const auto &entry :
+           std::filesystem::directory_iterator(documentsRoot_)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".md")
+          documentNames.push_back(entry.path().filename().string());
+      }
+      std::ranges::sort(documentNames);
+      result = {{"documents", std::move(documentNames)}, {"readOnly", true}};
+    } else if (command == "read_agent_document") {
+      const std::filesystem::path file =
+          ResolveAgentDocument(arguments.at("name").get<std::string>());
+      result = {{"name", file.filename().string()},
                 {"content", ReadTextFile(file)},
                 {"readOnly", true}};
     } else if (command == "read_game_file") {
@@ -760,6 +782,20 @@ GameToolService::ResolveAgentSkill(std::string_view name) const {
       !std::filesystem::is_regular_file(resolved)) {
     throw std::runtime_error("Agent skill does not exist.");
   }
+  return resolved;
+}
+
+std::filesystem::path
+GameToolService::ResolveAgentDocument(std::string_view name) const {
+  const std::filesystem::path relative(name);
+  if (relative.empty() || relative.is_absolute() ||
+      relative.filename() != relative || relative.extension() != ".md")
+    throw std::runtime_error("Invalid agent document name.");
+  const std::filesystem::path resolved =
+      std::filesystem::weakly_canonical(documentsRoot_ / relative);
+  if (!IsPathInside(resolved, documentsRoot_) ||
+      !std::filesystem::is_regular_file(resolved))
+    throw std::runtime_error("Agent document does not exist.");
   return resolved;
 }
 

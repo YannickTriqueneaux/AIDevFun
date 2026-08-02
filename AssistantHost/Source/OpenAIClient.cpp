@@ -255,6 +255,17 @@ nlohmann::json CreateGameToolDefinitions() {
               {{"type", "string"},
                {"description", "Skill name returned by list_agent_skills."}}}},
             {"name"}),
+       tool("confirm_no_applicable_skills",
+            "Confirm that no listed repository skill applies after reviewing "
+            "the list. Provide a concrete reason.",
+            {{"reason", {{"type", "string"}}}}, {"reason"}),
+       tool("list_agent_documents",
+            "List read-only top-level repository documents intended for AI "
+            "agents.",
+            nlohmann::json::object(), nlohmann::json::array()),
+       tool("read_agent_document",
+            "Read one top-level agent document completely.",
+            {{"name", {{"type", "string"}}}}, {"name"}),
        tool("read_game_file",
             "Read one C++ source file inside the Game module.",
             {{"path",
@@ -320,9 +331,11 @@ nlohmann::json CreateGameToolDefinitions() {
                  {"additionalProperties", false}}}}}},
             {"patches"}),
        tool("create_game_code_file",
-            "Create one new UTF-8 C++ file inside the active Game. Only .cpp "
-            "and .h paths are accepted. Existing files are never overwritten, "
-            "and content is validated as C++ source text before writing.",
+            "Create one new UTF-8 C++ file inside the active Game. Prefer this "
+            "for cohesive new features, EntityTypes, ComponentTypes, vector "
+            "art, or audio instead of growing unrelated catch-all files. Only "
+            ".cpp and .h paths are accepted. Existing files are never "
+            "overwritten, and content is validated as C++ source text.",
             {{"path",
               {{"type", "string"},
                {"description", "New .cpp or .h path relative to the Game."}}},

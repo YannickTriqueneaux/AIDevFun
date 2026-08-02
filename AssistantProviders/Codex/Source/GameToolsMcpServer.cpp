@@ -22,7 +22,8 @@ Json Tool(const char *name, const char *description, Json schema = Schema()) {
       toolName.starts_with("list_") || toolName.starts_with("read_") ||
       toolName.starts_with("search_") || toolName.starts_with("get_") ||
       toolName == "inspect_crash_diagnostics" ||
-      toolName == "game_tools_status";
+      toolName == "game_tools_status" ||
+      toolName == "confirm_no_applicable_skills";
   const bool destructive = toolName == "delete_game_code_file";
   return {{"name", name},
           {"description", description},
@@ -47,6 +48,14 @@ Json Tools() {
        Tool("list_game_files", "List editable C++ files in the active Game."),
        Tool("list_agent_skills", "List repository skills before editing."),
        Tool("read_agent_skill", "Read one repository skill completely.",
+            Schema({{"name", {{"type", "string"}}}}, {"name"})),
+       Tool("confirm_no_applicable_skills",
+            "Confirm that no listed repository skill applies. Use only after "
+            "list_agent_skills and provide a concrete reason.",
+            Schema({{"reason", {{"type", "string"}}}}, {"reason"})),
+       Tool("list_agent_documents",
+            "List top-level read-only documents intended for agents."),
+       Tool("read_agent_document", "Read one agent document completely.",
             Schema({{"name", {{"type", "string"}}}}, {"name"})),
        Tool("read_game_file", "Read one active Game C++ file.",
             Schema(path, {"path"})),
@@ -83,7 +92,8 @@ Json Tools() {
                         {"additionalProperties", false}}}}}},
                    {"patches"})),
        Tool("create_game_code_file",
-            "Create a validated new .cpp or .h file in the active Game.",
+            "Create a validated .cpp or .h file for a cohesive new Game "
+            "feature or type instead of growing an unrelated catch-all file.",
             Schema({{"path", {{"type", "string"}}},
                     {"content", {{"type", "string"}}}},
                    {"path", "content"})),
@@ -109,6 +119,9 @@ Json Error(const Json &id, int code, std::string message) {
 }
 
 Json Handle(const Json &request) {
+  static bool skillsInspected = false;
+  static bool applicableSkillRead = false;
+  static bool architectureRead = false;
   const Json id = request.value("id", Json(nullptr));
   const std::string method = request.value("method", "");
   if (method == "initialize") {
@@ -131,11 +144,52 @@ Json Handle(const Json &request) {
           id, {{"content", Json::array({{{"type", "text"},
                                          {"text", "Game Tools MCP ready."}}})},
                {"isError", false}});
+    if (name == "confirm_no_applicable_skills") {
+      const std::string reason = arguments.value("reason", "");
+      if (!skillsInspected || reason.size() < 12)
+        return Result(
+            id, {{"content",
+                  Json::array({{{"type", "text"},
+                                {"text", "List skills first and provide a "
+                                         "concrete reason."}}})},
+                 {"isError", true}});
+      applicableSkillRead = true;
+      return Result(
+          id, {{"content",
+                Json::array({{{"type", "text"},
+                              {"text", "Skill review completed: " + reason}}})},
+               {"isError", false}});
+    }
+    const bool mutatesGame =
+        name == "apply_game_patch" || name == "apply_game_patches" ||
+        name == "create_game_code_file" || name == "delete_game_code_file" ||
+        name == "build_game" || name == "reload_game" || name == "launch_game";
+    if (mutatesGame &&
+        (!skillsInspected || !applicableSkillRead || !architectureRead)) {
+      return Result(
+          id,
+          {{"content",
+            Json::array(
+                {{{"type", "text"},
+                  {"text",
+                   "Required agent guidance has not been inspected. Call "
+                   "list_agent_skills, read every applicable skill, and read "
+                   "Architecture.md with read_agent_document before changing "
+                   "or building the Game."}}})},
+           {"isError", true}});
+    }
     const Json gameRequest{{"command", name}, {"arguments", arguments}};
     const std::string raw = Engine::NamedPipeClient{}.Request(
         Development::GetGameToolsPipeName(), gameRequest.dump(), 30'000);
     const Json gameResponse = Json::parse(raw);
     const bool ok = gameResponse.value("ok", false);
+    if (ok && name == "list_agent_skills")
+      skillsInspected = true;
+    if (ok && name == "read_agent_skill")
+      applicableSkillRead = true;
+    if (ok && name == "read_agent_document" &&
+        arguments.value("name", "") == "Architecture.md")
+      architectureRead = true;
     return Result(
         id, {{"content", Json::array({{{"type", "text"}, {"text", raw}}})},
              {"isError", !ok}});
@@ -157,9 +211,15 @@ int main(int argc, char **argv) {
          {"method", "tools/call"},
          {"params",
           {{"name", "game_tools_status"}, {"arguments", Json::object()}}}});
+    const Json gatedBuild = Handle(
+        {{"jsonrpc", "2.0"},
+         {"id", 4},
+         {"method", "tools/call"},
+         {"params", {{"name", "build_game"}, {"arguments", Json::object()}}}});
     const bool passed = initialized.contains("result") &&
                         listed["result"]["tools"].size() >= 20 &&
-                        status["result"].value("isError", true) == false;
+                        status["result"].value("isError", true) == false &&
+                        gatedBuild["result"].value("isError", false) == true;
     return passed ? 0 : 1;
   }
   std::ofstream diagnostics;

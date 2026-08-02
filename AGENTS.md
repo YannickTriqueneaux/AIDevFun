@@ -15,3 +15,9 @@ not belong in `Engine`. Shared development protocols belong under
 transport.
 
 Before adding or renaming an API, search for an existing operation with the same semantics. Keep one canonical name and migrate callers; do not add forwarding aliases merely to mirror wording from a request or example unless compatibility is explicitly required.
+
+Prefer cohesive architecture over minimizing file or type count. Create new
+Game `.h/.cpp` files, EntityTypes, and focused ComponentTypes whenever a new
+concept has its own lifecycle, state, behavior, or resume boundary. Do not
+accumulate unrelated gameplay, vector art, or audio in `Game.cpp`, `Game.h`, or
+other catch-all files merely because they already exist.

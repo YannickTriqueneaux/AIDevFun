@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.24)
 
 project(MakeYourOwnGame.AI LANGUAGES CXX)
 
+set(MAKE_YOUR_OWN_GAME_AI_VERSION_MAJOR 1)
+set(MAKE_YOUR_OWN_GAME_AI_VERSION_MINOR 4)
+set(MAKE_YOUR_OWN_GAME_AI_VERSION_PATCH 0)
+set(MAKE_YOUR_OWN_GAME_AI_VERSION
+    "${MAKE_YOUR_OWN_GAME_AI_VERSION_MAJOR}.${MAKE_YOUR_OWN_GAME_AI_VERSION_MINOR}.${MAKE_YOUR_OWN_GAME_AI_VERSION_PATCH}")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -260,6 +266,18 @@ add_executable(GameRelease WIN32
     Engine/Source/World.cpp
     ${ACTIVE_GAME_RUNTIME_SOURCES}
 )
+if(WIN32)
+    enable_language(RC)
+    set(GAME_RELEASE_IDENTITY_RESOURCE
+        "${CMAKE_CURRENT_BINARY_DIR}/Generated/GameReleaseIdentity.rc")
+    configure_file(
+        cmake/GameReleaseIdentity.rc.in
+        "${GAME_RELEASE_IDENTITY_RESOURCE}"
+        @ONLY
+    )
+    target_sources(GameRelease PRIVATE
+        "$<$<CONFIG:Release>:${GAME_RELEASE_IDENTITY_RESOURCE}>")
+endif()
 target_include_directories(GameRelease PRIVATE
     Engine/Include
     ${ACTIVE_GAME_DIR}/Include

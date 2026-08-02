@@ -24,6 +24,16 @@ class that implements an entire actor. Projectiles, directors, triggers, and
 other world concepts are entities too; do not keep them as anonymous arrays in
 the game class.
 
+Create new types and files freely when they improve ownership and cohesion.
+Do not optimize for the smallest file count or append every new behavior to
+`Game.cpp`, `Game.h`, or a growing catch-all `GameplayComponents` pair. A new
+world concept normally deserves its own EntityType; an independently updated,
+serialized, reusable, or replaceable behavior normally deserves its own
+ComponentType. Prefer cohesive feature files such as
+`DragonEntity.h/.cpp` and `DragonComponents.h/.cpp`, or a similarly clear
+feature grouping. Keep trivial declarations together only when separating
+them would obscure rather than clarify ownership.
+
 Use this frame flow:
 
 1. Translate external input into commands and submit them to components.
@@ -90,6 +100,14 @@ When adding a behavior, first decide whether it belongs in an existing focused
 component or needs a new ComponentType. When adding a world concept, create an
 EntityType with an explicit component layout. Never add a parallel unmanaged
 collection to `ProceduralGame` merely because it is convenient.
+
+Before editing an existing type, ask whether the requested concept has a
+distinct lifecycle, state schema, update responsibility, spawn policy, or
+resume compatibility boundary. If it does, create a new EntityType,
+ComponentType, and dedicated source files instead of expanding an unrelated
+type. When a feature substantially replaces an existing concept, use new
+stable TypeIDs as required by the replacement rules rather than reshaping the
+old type solely to preserve its state.
 
 ## Validation
 
