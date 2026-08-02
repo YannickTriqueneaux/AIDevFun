@@ -53,9 +53,15 @@ private:
   Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> knightEntity_;
   Engine::Gameplay::ObjectRef<BaseGame::ArenaDirector> arenaDirector_;
   float footstepCooldown_ = 0.0f;
+  float dragonFlameSoundCooldown_ = 0.0f;
+  float carSoundCooldown_ = 0.0f;
   int activeNpcIndex_ = -1;
   bool leftFootstep_ = false;
   bool playerWalking_ = false;
+  bool previousDragonFireActive_ = false;
+  bool previousDragonAlive_ = true;
+  bool previousKnightActive_ = false;
+  bool previousKnightAttackActive_ = false;
   bool settingsMenuOpen_ = false;
   bool mKeyWasDown_ = false;
   bool volumeUpKeyWasDown_ = false;

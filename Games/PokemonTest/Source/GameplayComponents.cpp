@@ -186,6 +186,12 @@ void PlayerWeapon::LoadState(StateReader &reader, std::uint32_t version) {
 DragonFollower::DragonFollower(ObjectRef<Engine::Gameplay::Entity> owner)
     : Component(owner) {}
 
+float DragonFollower::RandomUnit() {
+  randomState_ = randomState_ * 1664525u + 1013904223u;
+  return static_cast<float>(randomState_ >> 8u) /
+         static_cast<float>(0x01000000u);
+}
+
 float DragonFollower::FireIntensity() const {
   if (!alive_ || breathTime_ <= 0.0f)
     return 0.0f;
@@ -228,43 +234,77 @@ void DragonFollower::Update(float deltaTime) {
   }
 
   auto *entity = GetOwner().Resolve();
-  const auto *target = target_.Resolve();
-  if (!entity || !target)
+  if (!entity)
     return;
 
-  const Engine::Vector2 desired{target->transform.position.x - followDistance_,
-                                target->transform.position.y - 34.0f};
+  if (homePosition_.x == 0.0f && homePosition_.y == 0.0f)
+    homePosition_ = entity->transform.position;
+
+  if (roamTimer_ > 0.0f) {
+    roamTimer_ = std::max(0.0f, roamTimer_ - deltaTime);
+    if (roamTimer_ <= 0.0f)
+      roamCooldown_ = 0.25f + RandomUnit() * 0.9f;
+  } else {
+    roamCooldown_ = std::max(0.0f, roamCooldown_ - deltaTime);
+    if (roamCooldown_ <= 0.0f) {
+      const float angle = RandomUnit() * 6.2831853f;
+      const float radius = 180.0f + RandomUnit() * 620.0f;
+      roamOffset_ = {std::cos(angle) * radius, std::sin(angle) * radius};
+      homePosition_ = entity->transform.position;
+      roamTimer_ = 2.8f + RandomUnit() * 4.6f;
+    }
+  }
+
+  Engine::Vector2 desiredPosition = {homePosition_.x + roamOffset_.x,
+                                    homePosition_.y + roamOffset_.y};
+  desiredPosition.x =
+      std::clamp(desiredPosition.x, 34.0f,
+                 static_cast<float>(GameConfig::WorldWidth) - 34.0f);
+  desiredPosition.y =
+      std::clamp(desiredPosition.y, 34.0f,
+                 static_cast<float>(GameConfig::WorldHeight) - 34.0f);
+
   const Engine::Vector2 toDesired{
-      desired.x - entity->transform.position.x,
-      desired.y - entity->transform.position.y};
+      desiredPosition.x - entity->transform.position.x,
+      desiredPosition.y - entity->transform.position.y};
   const float distanceSquared =
       toDesired.x * toDesired.x + toDesired.y * toDesired.y;
   if (distanceSquared <= 0.25f)
     return;
-  if (distanceSquared > 280.0f * 280.0f) {
-    entity->transform.position = desired;
+  if (distanceSquared > 1400.0f * 1400.0f) {
+    entity->transform.position = desiredPosition;
     return;
   }
   const float distance = std::sqrt(distanceSquared);
-  const float step = std::min(distance, movementSpeed_ * deltaTime);
+  const float speed = movementSpeed_ * (breathTime_ > 0.0f ? 0.82f : 1.0f);
+  const float step = std::min(distance, speed * deltaTime);
   entity->transform.position += toDesired * (step / distance);
 }
 
 void DragonFollower::SaveState(StateWriter &writer) const {
-  writer.Value(target_.GetID());
+  writer.Value(homePosition_);
   writer.Value(movementSpeed_);
   writer.Value(followDistance_);
   writer.Value(breathCooldown_);
   writer.Value(breathTime_);
   writer.Value(respawnTimer_);
+  writer.Value(roamCooldown_);
+  writer.Value(roamTimer_);
+  writer.Value(roamOffset_);
+  writer.Value(randomState_);
   writer.Value(alive_);
 }
 
 void DragonFollower::LoadState(StateReader &reader, std::uint32_t version) {
-  if (version < 1 || version > 3)
+  if (version < 1 || version > 5)
     throw std::runtime_error("Unsupported DragonFollower state version.");
-  target_ = ObjectRef<Engine::Gameplay::Entity>(
-      reader.Value<Engine::Gameplay::ObjectID>());
+  if (version >= 5) {
+    homePosition_ = reader.Value<Engine::Vector2>();
+  } else {
+    (void)reader.Value<Engine::Gameplay::ObjectID>();
+    if (const auto *entity = GetOwner().Resolve())
+      homePosition_ = entity->transform.position;
+  }
   movementSpeed_ = reader.Value<float>();
   followDistance_ = reader.Value<float>();
   if (version >= 2) {
@@ -276,11 +316,21 @@ void DragonFollower::LoadState(StateReader &reader, std::uint32_t version) {
   }
   if (version >= 3) {
     respawnTimer_ = reader.Value<float>();
-    alive_ = reader.Value<bool>();
   } else {
     respawnTimer_ = 0.0f;
-    alive_ = true;
   }
+  if (version >= 4) {
+    roamCooldown_ = reader.Value<float>();
+    roamTimer_ = reader.Value<float>();
+    roamOffset_ = reader.Value<Engine::Vector2>();
+    randomState_ = reader.Value<std::uint32_t>();
+  } else {
+    roamCooldown_ = 4.0f;
+    roamTimer_ = 0.0f;
+    roamOffset_ = {-58.0f, -34.0f};
+    randomState_ = 0x7f4a7c15u;
+  }
+  alive_ = version >= 3 ? reader.Value<bool>() : true;
 }
 
 KnightVisitor::KnightVisitor(ObjectRef<Engine::Gameplay::Entity> owner)
@@ -293,7 +343,19 @@ bool KnightVisitor::ConsumeDragonAttack() {
   return true;
 }
 
+void KnightVisitor::Crush() {
+  active_ = false;
+  attackPending_ = false;
+  attackFlash_ = 0.0f;
+  crushedTimer_ = 3.2f;
+  spawnCooldown_ = 4.5f;
+}
+
 void KnightVisitor::Update(float deltaTime) {
+  if (crushedTimer_ > 0.0f) {
+    crushedTimer_ = std::max(0.0f, crushedTimer_ - deltaTime);
+    return;
+  }
   attackFlash_ = std::max(0.0f, attackFlash_ - deltaTime);
   auto *entity = GetOwner().Resolve();
   auto *target = target_.Resolve();
@@ -339,19 +401,84 @@ void KnightVisitor::SaveState(StateWriter &writer) const {
   writer.Value(spawnCooldown_);
   writer.Value(attackFlash_);
   writer.Value(movementSpeed_);
+  writer.Value(crushedTimer_);
   writer.Value(active_);
   writer.Value(attackPending_);
 }
 
 void KnightVisitor::LoadState(StateReader &reader, std::uint32_t version) {
-  RequireVersion(version, "KnightVisitor");
+  if (version < 1 || version > 2)
+    throw std::runtime_error("Unsupported KnightVisitor state version.");
   target_ = ObjectRef<Engine::Gameplay::Entity>(
       reader.Value<Engine::Gameplay::ObjectID>());
   spawnCooldown_ = reader.Value<float>();
   attackFlash_ = reader.Value<float>();
   movementSpeed_ = reader.Value<float>();
+  if (version >= 2)
+    crushedTimer_ = reader.Value<float>();
+  else
+    crushedTimer_ = 0.0f;
   active_ = reader.Value<bool>();
   attackPending_ = reader.Value<bool>();
+}
+
+RoadCar::RoadCar(ObjectRef<Engine::Gameplay::Entity> owner) : Component(owner) {}
+
+void RoadCar::Configure(bool vertical, int lane, float direction, float speed,
+                        float routePosition, std::uint32_t colorIndex) {
+  vertical_ = vertical;
+  lane_ = lane;
+  direction_ = direction >= 0.0f ? 1.0f : -1.0f;
+  speed_ = speed;
+  routePosition_ = routePosition;
+  colorIndex_ = colorIndex;
+  ApplyTransform();
+}
+
+void RoadCar::ApplyTransform() {
+  auto *entity = GetOwner().Resolve();
+  if (!entity)
+    return;
+  if (vertical_) {
+    constexpr float lanes[]{577.0f, 1197.0f, 2077.0f, 3217.0f};
+    const int index = std::clamp(lane_, 0, 3);
+    entity->transform.position = {lanes[index] + direction_ * 13.0f,
+                                  routePosition_};
+  } else {
+    entity->transform.position = {routePosition_, 672.0f + direction_ * 18.0f};
+  }
+}
+
+void RoadCar::Update(float deltaTime) {
+  const float minimum = vertical_ ? 92.0f : 92.0f;
+  const float maximum = vertical_ ? static_cast<float>(GameConfig::WorldHeight) - 92.0f
+                                  : static_cast<float>(GameConfig::WorldWidth) - 92.0f;
+  routePosition_ += direction_ * speed_ * deltaTime;
+  if (direction_ > 0.0f && routePosition_ > maximum)
+    routePosition_ = minimum;
+  else if (direction_ < 0.0f && routePosition_ < minimum)
+    routePosition_ = maximum;
+  ApplyTransform();
+}
+
+void RoadCar::SaveState(StateWriter &writer) const {
+  writer.Value(routePosition_);
+  writer.Value(direction_);
+  writer.Value(speed_);
+  writer.Value(lane_);
+  writer.Value(colorIndex_);
+  writer.Value(vertical_);
+}
+
+void RoadCar::LoadState(StateReader &reader, std::uint32_t version) {
+  RequireVersion(version, "RoadCar");
+  routePosition_ = reader.Value<float>();
+  direction_ = reader.Value<float>();
+  speed_ = reader.Value<float>();
+  lane_ = reader.Value<int>();
+  colorIndex_ = reader.Value<std::uint32_t>();
+  vertical_ = reader.Value<bool>();
+  ApplyTransform();
 }
 
 EnemyMovement::EnemyMovement(ObjectRef<Engine::Gameplay::Entity> owner)

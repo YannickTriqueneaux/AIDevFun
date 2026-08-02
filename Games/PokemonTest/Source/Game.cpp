@@ -382,6 +382,35 @@ void DrawKnightSprite(Engine::Renderer2D &renderer, Engine::Vector2 center,
   }
 }
 
+void DrawRoadCarSprite(Engine::Renderer2D &renderer, Engine::Vector2 center,
+                       bool vertical, float direction,
+                       std::uint32_t colorIndex) {
+  constexpr std::array<Engine::Color, 6> colors{{
+      {210, 48, 62, 255}, {48, 118, 210, 255}, {245, 205, 92, 255},
+      {74, 203, 92, 255}, {210, 85, 210, 255}, {245, 245, 235, 255}}};
+  const Engine::Color body = colors[colorIndex % colors.size()];
+  const Engine::Vector2 size = vertical ? Engine::Vector2{28.0f, 50.0f}
+                                        : Engine::Vector2{54.0f, 28.0f};
+  const Engine::Vector2 topLeft{center.x - size.x * 0.5f,
+                                center.y - size.y * 0.5f};
+  DrawFilledRect(renderer, topLeft, size, {35, 38, 45, 255});
+  DrawFilledRect(renderer, {topLeft.x + 3.0f, topLeft.y + 3.0f},
+                 {size.x - 6.0f, size.y - 6.0f}, body);
+  if (vertical) {
+    DrawFilledRect(renderer, {center.x - 8.0f, center.y - 10.0f * direction},
+                   {16.0f, 12.0f}, {130, 205, 230, 230});
+    renderer.DrawLine({topLeft.x + 3.0f, center.y - size.y * 0.32f * direction},
+                      {topLeft.x + size.x - 3.0f, center.y - size.y * 0.32f * direction},
+                      3.0f, {255, 245, 160, 255});
+  } else {
+    DrawFilledRect(renderer, {center.x - 10.0f * direction, center.y - 8.0f},
+                   {14.0f, 16.0f}, {130, 205, 230, 230});
+    renderer.DrawLine({center.x + size.x * 0.34f * direction, topLeft.y + 3.0f},
+                      {center.x + size.x * 0.34f * direction, topLeft.y + size.y - 3.0f},
+                      3.0f, {255, 245, 160, 255});
+  }
+}
+
 int MaxHealthForFaction(BaseGame::Faction faction) {
   return faction == BaseGame::Faction::Player ? PlayerMaxHealth : 3;
 }
@@ -521,6 +550,8 @@ void ProceduralGame::RegisterGameplayTypes() {
       Engine::Gameplay::MakeComponentType<BaseGame::KnightVisitor>(
           "KnightVisitor"));
   world_.RegisterComponent(
+      Engine::Gameplay::MakeComponentType<BaseGame::RoadCar>("RoadCar"));
+  world_.RegisterComponent(
       Engine::Gameplay::MakeComponentType<BaseGame::EnemyMovement>(
           "EnemyMovement"));
   world_.RegisterComponent(
@@ -551,6 +582,8 @@ void ProceduralGame::RegisterGameplayTypes() {
   world_.RegisterEntity(
       {BaseGame::KnightEntityType, "Knight", {BaseGame::KnightVisitor::Type}});
   world_.RegisterEntity(
+      {BaseGame::RoadCarEntityType, "RoadCar", {BaseGame::RoadCar::Type}});
+  world_.RegisterEntity(
       {BaseGame::EnemyEntityType,
        "Enemy",
        {BaseGame::EnemyMovement::Type, BaseGame::EnemyWeapon::Type,
@@ -567,6 +600,7 @@ void ProceduralGame::EnsureCoreEntities() {
   Entity *player = nullptr;
   Entity *dragon = nullptr;
   Entity *knight = nullptr;
+  std::size_t roadCarCount = 0;
   for (const ObjectID id : world_.Entities()) {
     auto *entity = ObjectRef(id).Resolve();
     if (!entity)
@@ -586,6 +620,8 @@ void ProceduralGame::EnsureCoreEntities() {
     } else if (entity->GetTypeID() == BaseGame::KnightEntityType) {
       knight = entity;
       knightEntity_ = ObjectRef(id);
+    } else if (entity->GetTypeID() == BaseGame::RoadCarEntityType) {
+      ++roadCarCount;
     } else if (entity->GetTypeID() == BaseGame::ArenaDirectorEntityType) {
       arenaDirector_ = entity->GetComponent<BaseGame::ArenaDirector>();
     }
@@ -624,7 +660,7 @@ void ProceduralGame::EnsureCoreEntities() {
   }
   dragonFollower_ = dragon->GetComponent<BaseGame::DragonFollower>();
   if (auto *follower = dragonFollower_.Resolve())
-    follower->SetTarget(playerEntity_);
+    follower->SetHomePosition(dragon->transform.position);
 
   if (!knight) {
     knightEntity_ = world_.Spawn(BaseGame::KnightEntityType, "PassingKnight");
@@ -636,6 +672,35 @@ void ProceduralGame::EnsureCoreEntities() {
   knightVisitor_ = knight->GetComponent<BaseGame::KnightVisitor>();
   if (auto *visitor = knightVisitor_.Resolve())
     visitor->SetTarget(dragonEntity_);
+
+  constexpr std::size_t DesiredRoadCars = 10;
+  struct RoadCarSeed {
+    bool vertical;
+    int lane;
+    float direction;
+    float speed;
+    float routePosition;
+    std::uint32_t colorIndex;
+  };
+  constexpr RoadCarSeed seeds[DesiredRoadCars]{
+      {false, 0, 1.0f, 190.0f, 140.0f, 0},   {false, 0, -1.0f, 160.0f, 980.0f, 1},
+      {false, 0, 1.0f, 135.0f, 1880.0f, 2},  {false, 0, -1.0f, 205.0f, 3060.0f, 3},
+      {true, 0, 1.0f, 128.0f, 180.0f, 4},    {true, 1, -1.0f, 150.0f, 1030.0f, 5},
+      {true, 2, 1.0f, 142.0f, 520.0f, 1},    {true, 3, -1.0f, 118.0f, 870.0f, 0},
+      {true, 1, 1.0f, 175.0f, 310.0f, 2},    {true, 3, 1.0f, 132.0f, 1140.0f, 3},
+  };
+  for (std::size_t index = roadCarCount; index < DesiredRoadCars; ++index) {
+    const ObjectRef carRef = world_.Spawn(
+        BaseGame::RoadCarEntityType, "RoadCar#" + std::to_string(index));
+    world_.FlushSpawns();
+    if (auto *carEntity = carRef.Resolve()) {
+      const RoadCarSeed &seed = seeds[index];
+      if (auto *car = carEntity->GetComponent<BaseGame::RoadCar>().Resolve()) {
+        car->Configure(seed.vertical, seed.lane, seed.direction, seed.speed,
+                       seed.routePosition, seed.colorIndex);
+      }
+    }
+  }
 }
 
 void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
@@ -699,6 +764,89 @@ void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
     if (nearbyNpcIndex >= 0 && audio_ && audio_->ready)
       audio_->PlayNpcVoice(static_cast<std::size_t>(nearbyNpcIndex));
   }
+
+  if (audio_ && audio_->ready) {
+    const auto *player = playerEntity_.Resolve();
+    const Engine::Vector2 listener = player ? player->transform.position
+                                            : Engine::Vector2{};
+    const auto panFor = [](float sourceX, float listenerX) {
+      return std::clamp(0.5f + (sourceX - listenerX) / 520.0f, 0.1f, 0.9f);
+    };
+
+    if (const auto *dragonEntity = dragonEntity_.Resolve()) {
+      if (const auto *dragon = dragonFollower_.Resolve()) {
+        const bool alive = dragon->IsAlive();
+        const float fire = dragon->FireIntensity();
+        const bool fireActive = fire > 0.08f;
+        if (alive && !previousDragonAlive_)
+          audio_->PlayDragonVoice(0.62f, 1.18f);
+        if (!alive && previousDragonAlive_)
+          audio_->PlayDragonVoice(0.78f, 0.74f);
+        if (fireActive && !previousDragonFireActive_) {
+          audio_->PlayDragonVoice(0.56f, 1.04f);
+          audio_->PlayDragonFlameBurst(
+              std::clamp(0.72f + fire * 0.24f, 0.0f, 1.0f),
+              panFor(dragonEntity->transform.position.x, listener.x));
+        }
+        dragonFlameSoundCooldown_ =
+            std::max(0.0f, dragonFlameSoundCooldown_ - deltaTime);
+        if (fireActive && dragonFlameSoundCooldown_ <= 0.0f) {
+          audio_->PlayDragonFlame(std::clamp(0.45f + fire * 0.45f, 0.0f, 1.0f),
+                                  panFor(dragonEntity->transform.position.x,
+                                         listener.x));
+          dragonFlameSoundCooldown_ = 0.18f;
+        }
+        previousDragonAlive_ = alive;
+        previousDragonFireActive_ = fireActive;
+      }
+    }
+
+    if (const auto *knightEntity = knightEntity_.Resolve()) {
+      if (const auto *knight = knightVisitor_.Resolve()) {
+        const bool active = knight->IsActive();
+        const bool attacking = knight->AttackFlash() > 0.30f;
+        const float pan = panFor(knightEntity->transform.position.x, listener.x);
+        if (active && !previousKnightActive_)
+          audio_->PlayKnightSpawn(pan);
+        if (!active && previousKnightActive_)
+          audio_->PlayKnightDespawn(pan);
+        if (attacking && !previousKnightAttackActive_)
+          audio_->PlayKnightStrike(pan);
+        previousKnightActive_ = active;
+        previousKnightAttackActive_ = attacking;
+      }
+    }
+
+    carSoundCooldown_ = std::max(0.0f, carSoundCooldown_ - deltaTime);
+    if (carSoundCooldown_ <= 0.0f && player) {
+      float bestDistanceSquared = 180.0f * 180.0f;
+      const BaseGame::RoadCar *bestCar = nullptr;
+      Engine::Vector2 bestPosition{};
+      for (const ObjectID id : world_.Entities()) {
+        const auto *entity = ObjectRef(id).Resolve();
+        if (!entity || entity->GetTypeID() != BaseGame::RoadCarEntityType)
+          continue;
+        const auto *car = entity->GetComponent<BaseGame::RoadCar>().Resolve();
+        if (!car)
+          continue;
+        const float distanceSquared =
+            DistanceSquared(listener, entity->transform.position);
+        if (distanceSquared < bestDistanceSquared) {
+          bestDistanceSquared = distanceSquared;
+          bestCar = car;
+          bestPosition = entity->transform.position;
+        }
+      }
+      if (bestCar) {
+        const float distance = std::sqrt(bestDistanceSquared);
+        const float volume = std::clamp(1.0f - distance / 180.0f, 0.0f, 1.0f);
+        audio_->PlayCarPass(0.25f + volume * 0.55f,
+                            panFor(bestPosition.x, listener.x),
+                            bestCar->IsVertical() ? 0.92f : 1.08f);
+        carSoundCooldown_ = 0.24f;
+      }
+    }
+  }
 }
 
 ObjectRef ProceduralGame::SpawnEnemy(Engine::Vector2 position) {
@@ -736,7 +884,8 @@ ObjectRef ProceduralGame::SpawnProjectile(TypeID type, Engine::Vector2 position,
 }
 
 void ProceduralGame::ProcessFrameRequests() {
-  for (const ObjectID id : world_.Entities()) {
+  const auto entityIDs = world_.Entities();
+  for (const ObjectID id : entityIDs) {
     auto *entity = ObjectRef(id).Resolve();
     if (!entity || entity->GetTypeID() != BaseGame::KnightEntityType)
       continue;
@@ -744,6 +893,44 @@ void ProceduralGame::ProcessFrameRequests() {
     auto *dragon = dragonFollower_.Resolve();
     if (knight && dragon && knight->ConsumeDragonAttack())
       dragon->Kill();
+  }
+
+  auto overlaps = [](Engine::Vector2 leftCenter, Engine::Vector2 leftHalf,
+                     Engine::Vector2 rightCenter, Engine::Vector2 rightHalf) {
+    return std::abs(leftCenter.x - rightCenter.x) <= leftHalf.x + rightHalf.x &&
+           std::abs(leftCenter.y - rightCenter.y) <= leftHalf.y + rightHalf.y;
+  };
+
+  for (const ObjectID id : entityIDs) {
+    auto *carEntity = ObjectRef(id).Resolve();
+    if (!carEntity || carEntity->GetTypeID() != BaseGame::RoadCarEntityType)
+      continue;
+    const auto *car = carEntity->GetComponent<BaseGame::RoadCar>().Resolve();
+    if (!car)
+      continue;
+    const Engine::Vector2 carHalf =
+        car->IsVertical() ? Engine::Vector2{14.0f, 25.0f}
+                          : Engine::Vector2{27.0f, 14.0f};
+
+    if (auto *dragonEntity = dragonEntity_.Resolve()) {
+      if (auto *dragon = dragonFollower_.Resolve()) {
+        if (dragon->IsAlive() &&
+            overlaps(carEntity->transform.position, carHalf,
+                     dragonEntity->transform.position, {24.0f, 20.0f})) {
+          dragon->Kill();
+        }
+      }
+    }
+
+    if (auto *knightEntity = knightEntity_.Resolve()) {
+      if (auto *knight = knightVisitor_.Resolve()) {
+        if (knight->IsActive() &&
+            overlaps(carEntity->transform.position, carHalf,
+                     knightEntity->transform.position, {18.0f, 36.0f})) {
+          knight->Crush();
+        }
+      }
+    }
   }
 }
 
@@ -832,6 +1019,22 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
            {74.0f, static_cast<float>(GameConfig::WorldHeight)}, true);
   drawRoad({3180.0f, 0.0f},
            {74.0f, static_cast<float>(GameConfig::WorldHeight)}, true);
+
+  for (const ObjectID id : world_.Entities()) {
+    const auto *entity = ObjectRef(id).Resolve();
+    if (!entity || entity->GetTypeID() != BaseGame::RoadCarEntityType)
+      continue;
+    const auto *car = entity->GetComponent<BaseGame::RoadCar>().Resolve();
+    if (!car)
+      continue;
+    const Engine::Vector2 screen = WorldToScreen(entity->transform.position, camera);
+    if (screen.x < -80.0f || screen.y < -80.0f ||
+        screen.x > renderer.GetWidth() + 80.0f ||
+        screen.y > renderer.GetHeight() + 80.0f)
+      continue;
+    DrawRoadCarSprite(renderer, screen, car->IsVertical(), car->Direction(),
+                      car->ColorIndex());
+  }
 
   auto drawHouse = [&](Engine::Vector2 origin, float hueShift) {
     art.housePose->Reset();
@@ -1128,6 +1331,12 @@ void ProceduralGame::ResumeFromState(std::span<const std::byte> state) {
   knightVisitor_ = {};
   knightEntity_ = {};
   arenaDirector_ = {};
+  previousDragonFireActive_ = false;
+  previousDragonAlive_ = true;
+  previousKnightActive_ = false;
+  previousKnightAttackActive_ = false;
+  dragonFlameSoundCooldown_ = 0.0f;
+  carSoundCooldown_ = 0.0f;
   EnsureCoreEntities();
 }
 

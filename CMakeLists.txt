@@ -203,11 +203,23 @@ if(WIN32)
 endif()
 
 add_library(AssistantProviderCodex SHARED
-    AssistantProviders/Codex/Source/CodexProvider.cpp)
-target_include_directories(AssistantProviderCodex PRIVATE Development/Include)
+    AssistantProviders/Codex/Source/CodexProvider.cpp
+    AssistantProviders/Codex/Source/CodexEventParser.cpp)
+target_include_directories(AssistantProviderCodex PRIVATE
+    AssistantProviders/Codex/Include Development/Include)
 target_link_libraries(AssistantProviderCodex PRIVATE nlohmann_json::nlohmann_json)
 
-add_dependencies(AssistantHost AssistantProviderOpenAI AssistantProviderCodex)
+add_executable(GameToolsMcpServer
+    AssistantProviders/Codex/Source/GameToolsMcpServer.cpp)
+target_include_directories(
+    GameToolsMcpServer PRIVATE Development/Include Engine/Include)
+target_link_libraries(
+    GameToolsMcpServer PRIVATE Engine nlohmann_json::nlohmann_json)
+target_compile_definitions(GameToolsMcpServer PRIVATE
+    MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
+
+add_dependencies(AssistantHost AssistantProviderOpenAI AssistantProviderCodex
+                 GameToolsMcpServer)
 add_custom_command(
     TARGET AssistantHost
     POST_BUILD
@@ -271,7 +283,8 @@ set_target_properties(GameRelease PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${ACTIVE_GAME_DIR}/Release"
 )
 
-foreach(target Engine Game GameHost AssistantHost Launcher GameRelease)
+foreach(target Engine Game GameHost AssistantHost AssistantProviderOpenAI
+               AssistantProviderCodex GameToolsMcpServer Launcher GameRelease)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
     else()
@@ -299,10 +312,13 @@ if(BUILD_TESTING)
     add_executable(AssistantHostTests EXCLUDE_FROM_ALL
         Tests/AssistantHostTests.cpp
         AssistantHost/Source/MidiAttachmentProvider.cpp
+        AssistantProviders/Codex/Source/CodexEventParser.cpp
     )
     target_include_directories(
-        AssistantHostTests PRIVATE AssistantHost/Include Development/Include)
-    target_link_libraries(AssistantHostTests PRIVATE Engine)
+        AssistantHostTests PRIVATE AssistantHost/Include
+        AssistantProviders/Codex/Include Development/Include)
+    target_link_libraries(
+        AssistantHostTests PRIVATE Engine nlohmann_json::nlohmann_json)
     if(WIN32)
         target_link_libraries(AssistantHostTests PRIVATE shell32)
     endif()
@@ -336,9 +352,11 @@ if(BUILD_TESTING)
 
     add_custom_target(
         AutoTests DEPENDS EngineTests AssistantHostTests HotReloadTests
-                          GameToolServiceTests)
+                          GameToolServiceTests GameToolsMcpServer)
     add_test(NAME Engine.Pure COMMAND EngineTests)
     add_test(NAME AssistantHost.Midi COMMAND AssistantHostTests)
+    add_test(NAME AssistantProvider.CodexMcp
+             COMMAND GameToolsMcpServer --self-test)
     add_test(
         NAME GameTools.CodeFiles
         COMMAND GameToolServiceTests

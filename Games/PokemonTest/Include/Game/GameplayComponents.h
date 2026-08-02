@@ -26,6 +26,8 @@ inline constexpr TypeID DragonEntityType =
     Engine::Gameplay::StableTypeID("BaseGame.DragonEntity.v1");
 inline constexpr TypeID KnightEntityType =
     Engine::Gameplay::StableTypeID("BaseGame.KnightEntity.v1");
+inline constexpr TypeID RoadCarEntityType =
+    Engine::Gameplay::StableTypeID("BaseGame.RoadCarEntity.v1");
 
 enum class Faction : std::uint8_t { Player, Enemy };
 
@@ -98,9 +100,9 @@ public:
       Engine::Gameplay::StableTypeID("BaseGame.DragonFollower.v1");
   explicit DragonFollower(ObjectRef<Engine::Gameplay::Entity> owner);
   [[nodiscard]] TypeID GetTypeID() const override { return Type; }
-  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 3; }
+  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 5; }
   [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
-  void SetTarget(ObjectRef<Engine::Gameplay::Entity> target) { target_ = target; }
+  void SetHomePosition(Engine::Vector2 homePosition) { homePosition_ = homePosition; }
   [[nodiscard]] bool IsAlive() const { return alive_; }
   [[nodiscard]] float FireIntensity() const;
   [[nodiscard]] float RespawnProgress() const;
@@ -110,12 +112,17 @@ public:
   void LoadState(StateReader &reader, std::uint32_t version) override;
 
 private:
-  ObjectRef<Engine::Gameplay::Entity> target_;
-  float movementSpeed_ = 230.0f;
+  [[nodiscard]] float RandomUnit();
+  Engine::Vector2 homePosition_{};
+  float movementSpeed_ = 270.0f;
   float followDistance_ = 58.0f;
   float breathCooldown_ = 1.25f;
   float breathTime_ = 0.0f;
   float respawnTimer_ = 0.0f;
+  float roamCooldown_ = 0.8f;
+  float roamTimer_ = 0.0f;
+  Engine::Vector2 roamOffset_{360.0f, -120.0f};
+  std::uint32_t randomState_ = 0x7f4a7c15u;
   bool alive_ = true;
 };
 
@@ -125,12 +132,13 @@ public:
       Engine::Gameplay::StableTypeID("BaseGame.KnightVisitor.v1");
   explicit KnightVisitor(ObjectRef<Engine::Gameplay::Entity> owner);
   [[nodiscard]] TypeID GetTypeID() const override { return Type; }
-  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 1; }
+  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 2; }
   [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
   void SetTarget(ObjectRef<Engine::Gameplay::Entity> target) { target_ = target; }
   [[nodiscard]] bool IsActive() const { return active_; }
   [[nodiscard]] float AttackFlash() const { return attackFlash_; }
   [[nodiscard]] bool ConsumeDragonAttack();
+  void Crush();
   void Update(float deltaTime) override;
   void SaveState(StateWriter &writer) const override;
   void LoadState(StateReader &reader, std::uint32_t version) override;
@@ -140,8 +148,36 @@ private:
   float spawnCooldown_ = 4.0f;
   float attackFlash_ = 0.0f;
   float movementSpeed_ = 280.0f;
+  float crushedTimer_ = 0.0f;
   bool active_ = false;
   bool attackPending_ = false;
+};
+
+class RoadCar final : public Engine::Gameplay::Component {
+public:
+  static constexpr TypeID Type =
+      Engine::Gameplay::StableTypeID("BaseGame.RoadCar.v1");
+  explicit RoadCar(ObjectRef<Engine::Gameplay::Entity> owner);
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 1; }
+  [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
+  void Configure(bool vertical, int lane, float direction, float speed,
+                 float routePosition, std::uint32_t colorIndex);
+  [[nodiscard]] bool IsVertical() const { return vertical_; }
+  [[nodiscard]] float Direction() const { return direction_; }
+  [[nodiscard]] std::uint32_t ColorIndex() const { return colorIndex_; }
+  void Update(float deltaTime) override;
+  void SaveState(StateWriter &writer) const override;
+  void LoadState(StateReader &reader, std::uint32_t version) override;
+
+private:
+  void ApplyTransform();
+  float routePosition_ = 0.0f;
+  float direction_ = 1.0f;
+  float speed_ = 120.0f;
+  int lane_ = 0;
+  std::uint32_t colorIndex_ = 0;
+  bool vertical_ = false;
 };
 
 class EnemyMovement final : public Engine::Gameplay::Component {

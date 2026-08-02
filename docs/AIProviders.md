@@ -35,6 +35,7 @@ existing ChatGPT sign-in. Its settings are stored in
 ```json
 {
   "executable": "",
+  "gameToolsMcpExecutable": "",
   "model": "gpt-5.5",
   "reasoningEffort": "high"
 }
@@ -49,9 +50,26 @@ existing ChatGPT sign-in. Its settings are stored in
 - `reasoningEffort` is passed as Codex model configuration.
 - Pasted images are decoded to temporary files, passed with `--image`, and
   deleted after the response.
+- An empty `gameToolsMcpExecutable` selects `GameToolsMcpServer.exe` beside the
+  provider settings. The MCP server exposes the restricted Game tools and
+  relays them to `GameToolService` through its existing named pipe.
 
-Codex runs with its native agent tools inside the active Game directory. The
-provider does not store ChatGPT credentials in this repository.
+Codex runs with its local shell disabled and its filesystem sandbox in
+read-only mode. Game reads, writes, builds, reloads, and recovery operations
+must use the restricted Game Tools MCP server. The provider does not store
+ChatGPT credentials in this repository.
+
+The provider enables Codex MCP tool discovery because current Codex CLI builds
+defer custom MCP tools until the model searches for a relevant operation. Each
+tool also declares MCP safety annotations, allowing read-only operations and
+controlled Game mutations to be handled according to their actual effects.
+
+The provider parses the JSON Lines stream from `codex exec --json` while Codex
+is running. Commands, file changes, tool calls, searches, reasoning summaries,
+completion status, and token usage are converted into the generic provider
+events displayed by the Assistant activity console. Unknown event types are
+ignored for forward compatibility, and recent raw output is retained in CLI
+failure diagnostics.
 
 ## OpenAI API provider
 

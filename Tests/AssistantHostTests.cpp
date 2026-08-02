@@ -1,4 +1,5 @@
 #include "AssistantHost/MidiAttachmentProvider.h"
+#include "AssistantProviders/Codex/CodexEventParser.h"
 
 #include <cstdint>
 #include <iostream>
@@ -38,11 +39,49 @@ void TestMidiParsing() {
   Require(description.find("C4(60)") != std::string::npos,
           "MIDI pitch was not described.");
 }
+
+void TestCodexEventParsing() {
+  using AssistantProviders::Codex::ParseEventLine;
+  using Development::AssistantStreamEventType;
+
+  const auto thread =
+      ParseEventLine(R"({"type":"thread.started","thread_id":"thread-42"})");
+  Require(thread.threadId == "thread-42", "Codex thread ID was not parsed.");
+  Require(thread.events.size() == 1, "Codex thread activity was not emitted.");
+
+  const auto command = ParseEventLine(
+      R"({"type":"item.started","item":{"type":"command_execution","command":"cmake --build build"}})");
+  Require(command.events.size() == 1 &&
+              command.events[0].text.find("cmake --build") != std::string::npos,
+          "Codex command activity was not parsed.");
+
+  const auto reasoning = ParseEventLine(
+      R"({"type":"item.completed","item":{"type":"reasoning","text":"Inspecting the build failure."}})");
+  Require(reasoning.events.size() == 1 &&
+              reasoning.events[0].type ==
+                  AssistantStreamEventType::ReasoningSummaryDelta,
+          "Codex reasoning summary was not parsed.");
+
+  const auto completed = ParseEventLine(
+      R"({"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":80,"output_tokens":30}})");
+  Require(completed.usage.has_value() && completed.usage->inputTokens == 120 &&
+              completed.usage->cachedInputTokens == 80 &&
+              completed.usage->outputTokens == 30,
+          "Codex token usage was not parsed.");
+
+  const auto unknown =
+      ParseEventLine(R"({"type":"future.event","new_field":true})");
+  Require(unknown.events.empty(),
+          "Unknown Codex events should be ignored safely.");
+  Require(ParseEventLine("not json").events.empty(),
+          "Malformed Codex output should be ignored safely.");
+}
 } // namespace
 
 int main() {
   try {
     TestMidiParsing();
+    TestCodexEventParsing();
     std::cout << "AssistantHost tests passed.\n";
     return 0;
   } catch (const std::exception &exception) {
