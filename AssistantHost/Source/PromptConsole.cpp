@@ -80,7 +80,7 @@ using Engine::UiSystem;
 PromptConsole::PromptConsole(Development::AssistantProvider &provider,
                              PromptConsoleOptions options,
                              PromptAttachmentProvider *attachmentProvider)
-    : processor_(provider), options_(options),
+    : processor_(provider, options.promptConfigFile), options_(options),
       attachmentProvider_(attachmentProvider),
       expanded_(options.expandedByDefault) {
   messages_.push_back(

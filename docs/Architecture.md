@@ -252,7 +252,7 @@ Build and run them with:
 
 ```powershell
 cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
-cmake --build Games/MyGame/build --config Debug --target AutoTests
+cmake --build Games/MyGame/build --config Debug --target AutoTests --parallel
 ctest --test-dir Games/MyGame/build -C Debug --output-on-failure
 ```
 

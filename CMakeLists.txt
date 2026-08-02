@@ -176,6 +176,7 @@ target_compile_definitions(
 
 add_executable(AssistantHost
     AssistantHost/Source/AssistantApplication.cpp
+    AssistantHost/Source/AssistantPromptConfig.cpp
     AssistantHost/Source/AssistantProviderLoader.cpp
     AssistantHost/Source/GameToolClient.cpp
     AssistantHost/Source/main.cpp
@@ -232,6 +233,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/AssistantHost/Config/settings.json
         $<TARGET_FILE_DIR:AssistantHost>/settings.json
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/AssistantHost/Config/AssistantPrompts.json
+        $<TARGET_FILE_DIR:AssistantHost>/AssistantPrompts.json
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/AssistantProviders/OpenAI/OpenAIProvider.settings.json
         $<TARGET_FILE_DIR:AssistantHost>/OpenAIProvider.settings.json
@@ -329,6 +333,7 @@ if(BUILD_TESTING)
 
     add_executable(AssistantHostTests EXCLUDE_FROM_ALL
         Tests/AssistantHostTests.cpp
+        AssistantHost/Source/AssistantPromptConfig.cpp
         AssistantHost/Source/MidiAttachmentProvider.cpp
         AssistantProviders/Codex/Source/CodexEventParser.cpp
     )

@@ -1,5 +1,7 @@
 #include "AssistantHost/PromptProcessor.h"
 
+#include "AssistantHost/AssistantPromptConfig.h"
+
 #include "Engine/Core/Logger.h"
 
 #include <stdexcept>
@@ -8,48 +10,6 @@
 
 namespace AssistantHost {
 namespace {
-constexpr std::string_view GameDeveloperInstructions =
-    "You are the embedded AI developer for a lightweight C++20 game. "
-    "The reusable Engine is persistent and the Game is a hot-reloadable "
-    "DLL. Work only through the provided Game tools. Preserve the strict "
-    "Engine-to-Game dependency direction. For implementation requests, inspect "
-    "the available repository skills with list_agent_skills, then read every "
-    "skill whose description applies before editing. Skills are read-only "
-    "mandatory project guidance. If none applies, call "
-    "confirm_no_applicable_skills with a concrete reason. List the available "
-    "agent documents and read "
-    "Architecture.md before implementation work. Read AIProviders.md for "
-    "assistant-provider work. Inspect "
-    "Engine source through the read-only Engine tools when API behavior or "
-    "available capabilities are unclear. Engine access is context-only: never "
-    "attempt to modify Engine files. Inspect the relevant Game files and "
-    "prefer cohesive design over minimizing file or type count. Create new "
-    "Game .h/.cpp files, EntityTypes, and focused ComponentTypes whenever a "
-    "concept has its own lifecycle, persistent state, behavior, or resume "
-    "boundary. Do not accumulate unrelated features in Game.cpp, Game.h, or "
-    "catch-all component files. Apply coherent exact replacements, build Game, "
-    "repair build failures when possible, and request reload only after a "
-    "successful build. Never claim a tool succeeded unless its result says so. "
-    "When the Game has stopped in crash recovery mode, first call "
-    "inspect_crash_diagnostics. Correlate the newest crash report and process "
-    "logs with the Game source, implement the smallest justified repair, and "
-    "build it. In recovery mode, call launch_game only after build_game "
-    "reports "
-    "success; reload_game is only for a currently running Game. If evidence is "
-    "insufficient, explain that instead of guessing. "
-    "Minimize tool round trips: read independent files together with "
-    "read_game_files and submit all coherent ordered replacements together "
-    "with "
-    "apply_game_patches. Prefer one batch over many single-file calls. "
-    "Review a complete patch batch for syntax errors before submitting it. "
-    "Use create_game_code_file willingly for cohesive new features and types; "
-    "do not force them into existing files to avoid creating files. Use "
-    "delete_game_code_file only when an existing Game code file is obsolete. "
-    "After creating or deleting code, inspect related files and build before "
-    "requesting reload. "
-    "Do not attempt to modify Engine, Launcher, GameHost, or AssistantHost. "
-    "Respond in English with a concise summary of changes and validation.";
-
 constexpr int MaximumToolRounds = 32;
 
 std::string TruncateForLog(std::string_view text) {
@@ -61,8 +21,9 @@ std::string TruncateForLog(std::string_view text) {
 }
 } // namespace
 
-PromptProcessor::PromptProcessor(Development::AssistantProvider &provider)
-    : provider_(provider) {}
+PromptProcessor::PromptProcessor(Development::AssistantProvider &provider,
+                                 const std::filesystem::path &promptConfigPath)
+    : provider_(provider), promptConfigPath_(promptConfigPath) {}
 
 bool PromptProcessor::IsConfigured() const { return provider_.IsConfigured(); }
 
@@ -94,11 +55,14 @@ PromptProcessor::Process(std::string_view prompt,
       };
 
   try {
+    const std::string gameDeveloperInstructions =
+        AssistantPromptConfig::Load(promptConfigPath_)
+            .GetGameDeveloperInstructions();
     Engine::Logger::Info(
         "Starting assistant response. Previous response ID present: " +
         std::string(previousResponseId_.empty() ? "no." : "yes."));
     Development::AssistantResponse response =
-        provider_.CreateResponse(GameDeveloperInstructions, prompt, images,
+        provider_.CreateResponse(gameDeveloperInstructions, prompt, images,
                                  previousResponseId_, onEvent);
     accountForResponse(response);
 
@@ -141,7 +105,7 @@ PromptProcessor::Process(std::string_view prompt,
                  "Tool budget reached. Producing final response."});
       }
 
-      response = provider_.ContinueWithToolOutputs(GameDeveloperInstructions,
+      response = provider_.ContinueWithToolOutputs(gameDeveloperInstructions,
                                                    outputs, response.id,
                                                    onEvent, !finalToolRound);
       accountForResponse(response);

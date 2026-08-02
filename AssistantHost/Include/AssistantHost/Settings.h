@@ -7,6 +7,7 @@ namespace AssistantHost {
 struct LauncherSettings {
   std::string providerLibrary = "AssistantProviderOpenAI.dll";
   std::string providerSettings = "OpenAIProvider.settings.json";
+  std::string promptConfig = "AssistantPrompts.json";
 };
 
 class Settings {

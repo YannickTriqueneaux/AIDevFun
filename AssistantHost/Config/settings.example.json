@@ -1,6 +1,7 @@
-﻿{
+{
     "assistant":  {
                       "providerLibrary":  "AssistantProviderOpenAI.dll",
-                      "providerSettings":  "OpenAIProvider.settings.json"
+                      "providerSettings":  "OpenAIProvider.settings.json",
+                      "promptConfig":  "AssistantPrompts.json"
                   }
 }

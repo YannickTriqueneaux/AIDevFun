@@ -1,7 +1,10 @@
+#include "AssistantHost/AssistantPromptConfig.h"
 #include "AssistantHost/MidiAttachmentProvider.h"
 #include "AssistantProviders/Codex/CodexEventParser.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,6 +16,22 @@ void Require(bool condition, const char *message) {
     throw std::runtime_error(message);
 }
 
+void TestAssistantPromptConfig() {
+  const std::filesystem::path path = std::filesystem::temp_directory_path() /
+                                     "aitester_assistant_prompts_test.json";
+  {
+    std::ofstream stream(path, std::ios::binary);
+    stream << R"({"gameDeveloperInstructions":["First rule.","Second rule."]})";
+  }
+
+  const AssistantHost::AssistantPromptConfig config =
+      AssistantHost::AssistantPromptConfig::Load(path);
+  std::error_code error;
+  std::filesystem::remove(path, error);
+  Require(config.GetGameDeveloperInstructions() ==
+              "First rule.\n\nSecond rule.",
+          "Assistant prompt blocks were not loaded in order.");
+}
 void TestMidiParsing() {
   const std::vector<std::uint8_t> bytes{
       'M',  'T', 'h',  'd',  0,    0,    0,    6, 0,    0,    0,    1, 1,
@@ -80,6 +99,7 @@ void TestCodexEventParsing() {
 
 int main() {
   try {
+    TestAssistantPromptConfig();
     TestMidiParsing();
     TestCodexEventParsing();
     std::cout << "AssistantHost tests passed.\n";

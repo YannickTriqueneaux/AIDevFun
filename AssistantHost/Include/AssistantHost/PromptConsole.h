@@ -38,6 +38,7 @@ struct PromptConsoleOptions {
   bool expandedByDefault = false;
   bool fillWindow = false;
   std::filesystem::path automaticPromptFile;
+  std::filesystem::path promptConfigFile;
 };
 
 class PromptConsole {

@@ -324,7 +324,7 @@ Configure and build one game:
 
 ```powershell
 cmake -S . -B Games/MyGame/build -DGAME_PROJECT=MyGame
-cmake --build Games/MyGame/build --config Debug
+cmake --build Games/MyGame/build --config Debug --parallel
 ```
 
 Run:

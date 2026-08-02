@@ -30,7 +30,7 @@ cmake -S "%PROJECT_ROOT%" -B "%BUILD_DIR%" "-DGAME_PROJECT=%GAME_NAME%"
 if errorlevel 1 goto :failure
 
 echo [3/4] Building %CONFIGURATION%...
-cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%"
+cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%" --parallel
 if errorlevel 1 goto :failure
 
 set "LAUNCHER_PATH=%BUILD_DIR%\%CONFIGURATION%\Launcher.exe"

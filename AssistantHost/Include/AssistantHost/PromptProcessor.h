@@ -4,6 +4,8 @@
 #include "AssistantHost/PromptMessage.h"
 #include "Development/AssistantProvider.h"
 
+#include <filesystem>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -23,7 +25,8 @@ struct PromptProcessResult {
 
 class PromptProcessor {
 public:
-  explicit PromptProcessor(Development::AssistantProvider &provider);
+  PromptProcessor(Development::AssistantProvider &provider,
+                  const std::filesystem::path &promptConfigPath);
 
   [[nodiscard]] bool IsConfigured() const;
   [[nodiscard]] const std::string &GetModel() const;
@@ -35,6 +38,7 @@ public:
 
 private:
   Development::AssistantProvider &provider_;
+  std::filesystem::path promptConfigPath_;
   GameToolClient gameTools_;
   std::string previousResponseId_;
 };

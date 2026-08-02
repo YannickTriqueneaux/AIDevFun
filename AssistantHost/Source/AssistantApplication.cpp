@@ -19,6 +19,7 @@ namespace AssistantHost {
 struct AssistantApplication::Implementation {
   std::string gameWindowTitle;
   PromptAttachmentProvider *attachmentProvider = nullptr;
+  std::filesystem::path promptConfigPath;
   Engine::DesktopWindow window;
   AssistantProviderLoader provider;
 };
@@ -29,6 +30,7 @@ AssistantApplication::AssistantApplication(
     PromptAttachmentProvider *attachmentProvider)
     : implementation_(new Implementation{
           gameName + " - Game", attachmentProvider,
+          executableDirectory / settings.promptConfig,
           Engine::DesktopWindow({.width = AssistantWindowWidth,
                                  .height = AssistantWindowHeight,
                                  .targetFramesPerSecond = 60,
@@ -50,7 +52,8 @@ void AssistantApplication::Run() {
        .expandedByDefault = true,
        .fillWindow = true,
        .automaticPromptFile =
-           std::filesystem::current_path() / "AIRecovery.prompt"},
+           std::filesystem::current_path() / "AIRecovery.prompt",
+       .promptConfigFile = implementation_->promptConfigPath},
       implementation_->attachmentProvider);
 
   while (!implementation_->window.ShouldClose()) {

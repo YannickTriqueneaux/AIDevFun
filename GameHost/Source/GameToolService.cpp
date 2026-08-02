@@ -807,8 +807,8 @@ std::string GameToolService::BuildGame() {
       "\"" + buildDirectory_.string() + "\"";
   const std::string command =
       "cmake --build " + quotedBuildDirectory +
-      " --config Debug --target ZERO_CHECK 2>&1 && cmake --build " +
-      quotedBuildDirectory + " --config Debug --target Game 2>&1";
+      " --config Debug --target ZERO_CHECK --parallel 2>&1 && cmake --build " +
+      quotedBuildDirectory + " --config Debug --target Game --parallel 2>&1";
 
   std::array<char, 4096> buffer{};
   std::string output;

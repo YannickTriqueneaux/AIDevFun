@@ -1,4 +1,4 @@
 interface:
   display_name: "Procedural Audio"
   short_description: "Generate synthesized game sounds and music"
-  default_prompt: "Use $procedural-audio to create an efficient synthesized sound or music sequence for the game."
+  default_prompt: "Use $procedural-audio to proactively create focused, efficient sound or music when it naturally improves the game, even if audio was omitted from the request."

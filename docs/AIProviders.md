@@ -17,7 +17,8 @@ file consumed by that DLL:
 {
   "assistant": {
     "providerLibrary": "AssistantProviderCodex.dll",
-    "providerSettings": "CodexProvider.settings.json"
+    "providerSettings": "CodexProvider.settings.json",
+    "promptConfig": "AssistantPrompts.json"
   }
 }
 ```
@@ -26,6 +27,17 @@ The paths are resolved relative to the built `AssistantHost` executable. CMake
 copies the selected host settings, provider DLLs, and provider settings into
 the build output.
 
+## Shared assistant prompts
+
+`AssistantHost/Config/AssistantPrompts.json` contains the provider-neutral
+instructions sent to every assistant. `settings.json` selects it with
+`assistant.promptConfig`, and CMake copies it beside `AssistantHost`. Keep
+creative workflow, Game architecture, tool discipline, and completion policy in
+this JSON instead of C++ so prompt behavior can be iterated without recompiling.
+The file is reloaded at the start of every submitted prompt, so edits apply to
+the next request without restarting `AssistantHost`.
+Provider code should add no duplicate behavioral prompt; provider-specific
+transport and security constraints remain in provider configuration and code.
 ## Codex provider
 
 `AssistantProviderCodex.dll` launches the installed Codex CLI and uses its

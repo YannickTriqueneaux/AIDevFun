@@ -13,7 +13,11 @@ LauncherSettings Settings::Load(const std::filesystem::path &path) {
   nlohmann::json document;
   stream >> document;
   const auto &assistant = document.at("assistant");
-  return {.providerLibrary = assistant.value("providerLibrary", "AssistantProviderOpenAI.dll"),
-          .providerSettings = assistant.value("providerSettings", "OpenAIProvider.settings.json")};
+  return {
+      .providerLibrary =
+          assistant.value("providerLibrary", "AssistantProviderOpenAI.dll"),
+      .providerSettings =
+          assistant.value("providerSettings", "OpenAIProvider.settings.json"),
+      .promptConfig = assistant.value("promptConfig", "AssistantPrompts.json")};
 }
 } // namespace AssistantHost

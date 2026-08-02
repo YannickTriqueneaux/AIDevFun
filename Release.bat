@@ -82,7 +82,7 @@ cmake -S "%PROJECT_ROOT%" -B "%BUILD_DIR%" "-DGAME_PROJECT=%SELECTED_GAME%"
 if errorlevel 1 goto :failure
 
 echo [3/3] Building the monolithic Release executable...
-cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%" --target GameRelease
+cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%" --target GameRelease --parallel
 if errorlevel 1 goto :failure
 
 if not exist "%RELEASE_EXE%" (

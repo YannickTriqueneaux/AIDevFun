@@ -79,6 +79,14 @@ Preserve these invariants:
     and migrate its callers. Do not create forwarding aliases solely to make
     code resemble pseudocode from a request.
 
+17. Treat a request to replace the whole game, genre, core loop, or creative
+    identity as an explicit replacement boundary. Do not reinterpret it as a
+    reskin, compatibility migration, or "first pass." Create new EntityTypes
+    and ComponentTypes with new TypeIDs, remove obsolete gameplay and
+    presentation resources, and allow incompatible old state to be skipped.
+    Deliver the complete replacement in the current request unless the user
+    explicitly asks for staged work. Preserve only infrastructure and concepts
+    that remain genuinely compatible with the new game.
 ## BaseGame reference
 
 Use `Games/BaseGame` as the concrete architecture example:
@@ -111,7 +119,7 @@ old type solely to preserve its state.
 
 ## Validation
 
-Run `cmake --build build --config Debug --target AutoTests`, then `ctest --test-dir build -C Debug --output-on-failure`.
+Run `cmake --build build --config Debug --target AutoTests --parallel`, then `ctest --test-dir build -C Debug --output-on-failure`.
 
 Test deferred resolution, update order, slot reuse/version invalidation, stale refs, exact ID preservation, all state fields, debug names, unsupported versions, malformed snapshots, and an actual DLL reload. Also assert the gameplay outcome of each new component, such as spawned entity counts or projectile factions. Assert state equality before and after reload.
 

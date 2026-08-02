@@ -8,6 +8,13 @@ For SVG, vector shapes, AI-authored game visuals, named visual groups, or vector
 
 For synthesized sound effects, instruments, music, audio playback, or resumable music state, read and follow `docs/skills/procedural-audio/SKILL.md` before editing.
 
+For every player-visible gameplay or presentation change, proactively consider audio even when the user did not mention it. Add focused sound effects, ambience, or music when they naturally improve feedback, atmosphere, or game feel; read the procedural-audio skill before doing so. Do not add audio mechanically when silence or restraint better serves the idea.
+
+When a request replaces the entire game, genre, core loop, or creative identity,
+treat the old gameplay as obsolete. Do not silently reduce the work to a reskin
+or first conversion pass. Create replacement types with new stable TypeIDs,
+remove obsolete gameplay and presentation resources, and complete the requested
+replacement now unless the user explicitly requests staged migration.
 Keep assistant-only behavior under `AssistantHost`: prompts, OpenAI transport,
 pricing, settings, conversation state, model tools, and attachment decoding do
 not belong in `Engine`. Shared development protocols belong under

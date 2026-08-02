@@ -121,7 +121,7 @@ cmake -S "%PROJECT_ROOT%" -B "%BUILD_DIR%" "-DGAME_PROJECT=%SELECTED_GAME%" "-DE
 if errorlevel 1 goto :failure
 
 echo [3/4] Building %CONFIGURATION%...
-cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%"
+cmake --build "%BUILD_DIR%" --config "%CONFIGURATION%" --parallel
 if errorlevel 1 goto :failure
 
 set "LAUNCHER_PATH=%BUILD_DIR%\%CONFIGURATION%\Launcher.exe"
@@ -137,7 +137,7 @@ if /I "%PROFILE_ENABLED%"=="ON" (
     echo Building Tracy Profiler...
     cmake -S "!TRACY_PROFILER_SOURCE!" -B "!TRACY_PROFILER_BUILD!" "-DGIT_EXECUTABLE=%PROJECT_ROOT%\Tools\TracyGit.cmd" -DCMAKE_DISABLE_FIND_PACKAGE_Git=FALSE
     if errorlevel 1 goto :failure
-    cmake --build "!TRACY_PROFILER_BUILD!" --config Release
+    cmake --build "!TRACY_PROFILER_BUILD!" --config Release --parallel
     if errorlevel 1 goto :failure
     set "TRACY_PROFILER_PATH=!TRACY_PROFILER_BUILD!\Release\tracy-profiler.exe"
     if not exist "!TRACY_PROFILER_PATH!" (

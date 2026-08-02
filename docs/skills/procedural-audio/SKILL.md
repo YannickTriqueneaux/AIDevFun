@@ -1,12 +1,29 @@
 ---
 name: procedural-audio
-description: Create or modify AI-authored synthesized game sound effects, instruments, music sequences, audio playback, or resumable music state using Engine::ProceduralSound and Engine::ProceduralMusic. Use for weapons, impacts, pickups, UI feedback, footsteps, ambience, retro music, tracker-like composition, or any Game audio work.
+description: Create or modify AI-authored synthesized game sound effects, instruments, music sequences, audio playback, or resumable music state using Engine::ProceduralSound and Engine::ProceduralMusic. Use for weapons, impacts, pickups, UI feedback, footsteps, ambience, retro music, tracker-like composition, any Game audio work, and proactively when player-visible gameplay would naturally benefit from audio even if the user did not mention it.
 ---
 
 # Procedural audio
 
 Use `Engine/Audio/ProceduralAudio.h`. Do not generate WAV files, allocate
 samples in gameplay, or synthesize during `Update`.
+
+## Take audio initiative
+
+For every player-visible gameplay or presentation change, actively evaluate
+whether audio would make the result feel complete. Users commonly omit audio
+from otherwise complete ideas; treat that omission as permission to add a
+small, coherent audio layer when it is a natural part of the experience.
+Examples include weapon fire and impact, damage and death, spawning, pickups,
+movement accents, UI confirmation, scene transitions, environmental ambience,
+and a fitting music loop.
+
+Exercise creative judgment rather than adding sound mechanically. Add audio
+when it communicates an event, reinforces feedback, establishes atmosphere, or
+materially improves game feel. Keep it out when silence is intentional, the
+event is insignificant or excessively frequent, or the new audio would conflict
+with the requested tone. Prefer a focused set of distinctive, reusable sounds
+over indiscriminate effects on every update.
 
 ## Organize Game audio
 

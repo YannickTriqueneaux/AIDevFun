@@ -15,7 +15,7 @@ jobs:
         run: cmake -S . -B build -DGAME_PROJECT=BaseGame -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build headless auto-tests
-        run: cmake --build build --config Debug --target AutoTests
+        run: cmake --build build --config Debug --target AutoTests --parallel
 
       - name: Run headless auto-tests
         run: ctest --test-dir build -C Debug --output-on-failure
