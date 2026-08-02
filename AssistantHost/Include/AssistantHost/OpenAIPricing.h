@@ -1,12 +1,11 @@
 #pragma once
 
-#include "Engine/Core/Export.h"
-
+#include "Development/AssistantProvider.h"
 #include <cstdint>
 #include <string>
 #include <string_view>
 
-namespace Engine {
+namespace AssistantHost {
 struct OpenAIPricingSettings {
   std::string model;
   double inputUsdPerMillion = 0.0;
@@ -22,29 +21,11 @@ struct OpenAIPricingSettings {
   }
 };
 
-struct OpenAITokenUsage {
-  std::uint64_t inputTokens = 0;
-  std::uint64_t cachedInputTokens = 0;
-  std::uint64_t outputTokens = 0;
+using OpenAITokenUsage = Development::AssistantTokenUsage;
 
-  [[nodiscard]] std::uint64_t TotalTokens() const {
-    return inputTokens + outputTokens;
-  }
+using OpenAICostEstimate = Development::AssistantCostEstimate;
 
-  OpenAITokenUsage &operator+=(const OpenAITokenUsage &other) {
-    inputTokens += other.inputTokens;
-    cachedInputTokens += other.cachedInputTokens;
-    outputTokens += other.outputTokens;
-    return *this;
-  }
-};
-
-struct OpenAICostEstimate {
-  bool available = false;
-  double usd = 0.0;
-};
-
-[[nodiscard]] ENGINE_API OpenAICostEstimate
+[[nodiscard]] OpenAICostEstimate
 EstimateOpenAICost(std::string_view model, const OpenAIPricingSettings &pricing,
                    const OpenAITokenUsage &usage);
-} // namespace Engine
+} // namespace AssistantHost

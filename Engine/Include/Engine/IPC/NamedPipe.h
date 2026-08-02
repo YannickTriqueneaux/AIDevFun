@@ -7,8 +7,6 @@
 #include <string_view>
 
 namespace Engine {
-[[nodiscard]] ENGINE_API std::string_view GetGameToolsPipeName();
-
 class ENGINE_API NamedPipeClient {
 public:
   [[nodiscard]] std::string

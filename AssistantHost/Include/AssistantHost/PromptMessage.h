@@ -2,11 +2,11 @@
 
 #include <string>
 
-namespace Engine {
+namespace AssistantHost {
 enum class PromptMessageRole { User, Result, Information };
 
 struct PromptMessage {
   PromptMessageRole role = PromptMessageRole::Information;
   std::string text;
 };
-} // namespace Engine
+} // namespace AssistantHost

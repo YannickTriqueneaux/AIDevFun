@@ -8,4 +8,10 @@ For SVG, vector shapes, AI-authored game visuals, named visual groups, or vector
 
 For synthesized sound effects, instruments, music, audio playback, or resumable music state, read and follow `docs/skills/procedural-audio/SKILL.md` before editing.
 
+Keep assistant-only behavior under `AssistantHost`: prompts, OpenAI transport,
+pricing, settings, conversation state, model tools, and attachment decoding do
+not belong in `Engine`. Shared development protocols belong under
+`Development`; Engine contains only reusable runtime services and generic
+transport.
+
 Before adding or renaming an API, search for an existing operation with the same semantics. Keep one canonical name and migrate callers; do not add forwarding aliases merely to mirror wording from a request or example unless compatibility is explicitly required.

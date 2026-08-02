@@ -1,8 +1,8 @@
-#include "Engine/AI/OpenAIPricing.h"
+#include "AssistantHost/OpenAIPricing.h"
 
 #include <algorithm>
 
-namespace Engine {
+namespace AssistantHost {
 OpenAICostEstimate EstimateOpenAICost(std::string_view model,
                                       const OpenAIPricingSettings &pricing,
                                       const OpenAITokenUsage &usage) {
@@ -32,4 +32,4 @@ OpenAICostEstimate EstimateOpenAICost(std::string_view model,
 
   return {.available = true, .usd = inputCost + outputCost};
 }
-} // namespace Engine
+} // namespace AssistantHost

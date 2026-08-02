@@ -3,6 +3,43 @@
 This document records implementation conventions that are useful to developers
 and AI agents but are intentionally kept out of the product-facing README.
 
+The runtime-selectable assistant backend and provider DLL contract are
+documented in [AIProviders.md](AIProviders.md).
+
+## Runtime and development-host boundaries
+
+`Engine` is the reusable runtime. It owns graphics, audio, input, UI primitives,
+gameplay objects, serialization, hot-reload support, platform services, and
+generic IPC transport. It must not own product-specific AI or development-host
+behavior.
+
+`AssistantHost` owns the assistant window, conversation state, prompt UI and
+processing, Game-tool client, prompt attachment decoding, and the generic
+assistant-provider loader. Provider-specific transport, authentication,
+pricing, models, and settings live in separate provider DLLs. The neutral ABI
+is under `Development`; new OpenAI, Codex, Claude, or other integrations belong
+in provider DLLs, never in `Engine`.
+
+`GameHost` owns the reloadable Game DLL and the restricted server-side Game
+tools. The Game-tool pipe name is shared development protocol metadata under
+`Development/`; only the generic named-pipe transport remains in `Engine`.
+
+The intended dependency direction is:
+
+```text
+Game ----------> Engine
+GameHost ------> Engine
+AssistantHost -> Engine
+Launcher ------> Engine
+
+Engine -X-> Game, GameHost, AssistantHost, assistant providers
+```
+
+Before adding an Engine subsystem, ask whether Game or GameRelease needs it. If
+only AssistantHost consumes it, place it under `AssistantHost`. If it is a
+development protocol shared by AssistantHost and GameHost, place its neutral
+contract under `Development` while keeping each endpoint in its owning host.
+
 ## Incremental compilation and shadow DLLs
 
 CMake and the compiler reuse previous build artifacts, so unchanged translation

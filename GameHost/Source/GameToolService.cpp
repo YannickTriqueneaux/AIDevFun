@@ -2,6 +2,7 @@
 
 #include "GameHost/ReloadableGame.h"
 
+#include "Development/GameToolsProtocol.h"
 #include "Engine/Core/Logger.h"
 #include "Engine/Serialization/Serializer.h"
 
@@ -10,6 +11,7 @@
 #include <cstdio>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <map>
 #include <ranges>
 #include <sstream>
@@ -61,6 +63,92 @@ bool IsAllowedSourceExtension(const std::filesystem::path &path) {
   static const std::unordered_set<std::string> extensions{".cpp", ".h", ".hpp",
                                                           ".inl"};
   return extensions.contains(path.extension().string());
+}
+
+bool IsCreatableSourceExtension(const std::filesystem::path &path) {
+  return path.extension() == ".cpp" || path.extension() == ".h";
+}
+
+bool IsValidUtf8(std::string_view content) {
+  for (std::size_t index = 0; index < content.size();) {
+    const auto first = static_cast<unsigned char>(content[index]);
+    if (first < 0x80U) {
+      ++index;
+      continue;
+    }
+    std::size_t continuationCount = 0;
+    std::uint32_t codePoint = 0;
+    if ((first & 0xe0U) == 0xc0U) {
+      continuationCount = 1;
+      codePoint = first & 0x1fU;
+    } else if ((first & 0xf0U) == 0xe0U) {
+      continuationCount = 2;
+      codePoint = first & 0x0fU;
+    } else if ((first & 0xf8U) == 0xf0U) {
+      continuationCount = 3;
+      codePoint = first & 0x07U;
+    } else {
+      return false;
+    }
+    if (index + continuationCount >= content.size())
+      return false;
+    for (std::size_t offset = 1; offset <= continuationCount; ++offset) {
+      const auto byte = static_cast<unsigned char>(content[index + offset]);
+      if ((byte & 0xc0U) != 0x80U)
+        return false;
+      codePoint = (codePoint << 6U) | (byte & 0x3fU);
+    }
+    const std::uint32_t minimum = continuationCount == 1   ? 0x80U
+                                  : continuationCount == 2 ? 0x800U
+                                                           : 0x10000U;
+    if (codePoint < minimum || codePoint > 0x10ffffU ||
+        (codePoint >= 0xd800U && codePoint <= 0xdfffU))
+      return false;
+    index += continuationCount + 1;
+  }
+  return true;
+}
+
+void ValidateNewCppContent(std::string_view content) {
+  if (content.empty())
+    throw std::runtime_error("New C++ file content cannot be empty.");
+  if (content.size() > MaximumFileSize)
+    throw std::runtime_error("New C++ file exceeds the 512 KiB limit.");
+  if (!IsValidUtf8(content))
+    throw std::runtime_error("New C++ file must contain valid UTF-8 text.");
+  for (const unsigned char character : content) {
+    if ((character < 0x20U && character != '\t' && character != '\r' &&
+         character != '\n') ||
+        character == 0x7fU) {
+      throw std::runtime_error(
+          "New C++ file contains binary or unsupported control bytes.");
+    }
+  }
+
+  static constexpr std::array ForbiddenFragments{
+      "```",     "<!DOCTYPE",  "<!doctype",        "<html", "<HTML", "<script",
+      "<SCRIPT", "data:text/", "data:application/"};
+  for (const std::string_view fragment : ForbiddenFragments) {
+    if (content.find(fragment) != std::string_view::npos)
+      throw std::runtime_error(
+          "New C++ file contains Markdown, HTML, or embedded document data.");
+  }
+
+  static constexpr std::array CppMarkers{
+      "#include",   "#pragma",    "#define",    "namespace ",    "class ",
+      "struct ",    "enum ",      "using ",     "typedef ",      "template<",
+      "template <", "constexpr ", "consteval ", "static_assert("};
+  const bool hasDeclarationMarker =
+      std::ranges::any_of(CppMarkers, [content](std::string_view marker) {
+        return content.find(marker) != std::string_view::npos;
+      });
+  const bool hasFunctionShape = content.find('(') != std::string_view::npos &&
+                                content.find(')') != std::string_view::npos &&
+                                content.find('{') != std::string_view::npos &&
+                                content.find('}') != std::string_view::npos;
+  if (!hasDeclarationMarker && !hasFunctionShape)
+    throw std::runtime_error(
+        "New file was rejected because it does not look like C++ code.");
 }
 
 std::string ReadTextFile(const std::filesystem::path &path) {
@@ -132,6 +220,33 @@ void WriteTextFileAtomically(const std::filesystem::path &file,
   std::filesystem::rename(temporary, file);
 #endif
 }
+
+void CreateTextFileAtomically(const std::filesystem::path &file,
+                              std::string_view content) {
+  const std::filesystem::path temporary = file.string() + ".assistant.tmp";
+  if (std::filesystem::exists(temporary))
+    throw std::runtime_error("Temporary assistant file already exists.");
+  {
+    std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
+    if (!stream)
+      throw std::runtime_error("Unable to create temporary Game file.");
+    stream.write(content.data(), static_cast<std::streamsize>(content.size()));
+    if (!stream) {
+      stream.close();
+      std::filesystem::remove(temporary);
+      throw std::runtime_error("Writing temporary Game file failed.");
+    }
+  }
+
+#if defined(_WIN32)
+  if (!MoveFileExW(temporary.c_str(), file.c_str(), MOVEFILE_WRITE_THROUGH)) {
+    std::filesystem::remove(temporary);
+    throw std::runtime_error("Atomic creation of the Game file failed.");
+  }
+#else
+  std::filesystem::rename(temporary, file);
+#endif
+}
 } // namespace
 
 GameToolService::GameToolService(ReloadableGame *game,
@@ -146,11 +261,10 @@ GameToolService::GameToolService(ReloadableGame *game,
           gameRoot_.parent_path().parent_path() / "docs" / "skills")),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
-      recoveryMode_(recoveryMode),
-      server_(std::string(Engine::GetGameToolsPipeName()),
-              [this](std::string_view request) {
-                return HandleRequest(request);
-              }) {}
+      recoveryMode_(recoveryMode), server_(Development::GetGameToolsPipeName(),
+                                           [this](std::string_view request) {
+                                             return HandleRequest(request);
+                                           }) {}
 
 bool GameToolService::IsLaunchRequested() const { return launchRequested_; }
 
@@ -423,6 +537,27 @@ std::string GameToolService::HandleRequest(std::string_view request) {
       result = {{"changed", true},
                 {"patchCount", patches.size()},
                 {"files", std::move(files)}};
+    } else if (command == "create_game_code_file") {
+      const std::filesystem::path file =
+          ResolveNewGameFile(arguments.at("path").get<std::string>());
+      const std::string content = arguments.at("content").get<std::string>();
+      ValidateNewCppContent(content);
+      CreateTextFileAtomically(file, content);
+      result = {
+          {"path", std::filesystem::relative(file, gameRoot_).generic_string()},
+          {"created", true},
+          {"validatedAs", "C++ source text"}};
+    } else if (command == "delete_game_code_file") {
+      const std::filesystem::path file =
+          ResolveGameFile(arguments.at("path").get<std::string>());
+      if (!IsCreatableSourceExtension(file))
+        throw std::runtime_error(
+            "Only .cpp and .h Game files may be deleted by this tool.");
+      const std::string relative =
+          std::filesystem::relative(file, gameRoot_).generic_string();
+      if (!std::filesystem::remove(file))
+        throw std::runtime_error("Deleting the Game code file failed.");
+      result = {{"path", relative}, {"deleted", true}};
     } else if (command == "build_game") {
       result = nlohmann::json::parse(BuildGame());
     } else if (command == "read_build_output") {
@@ -555,6 +690,36 @@ GameToolService::ResolveGameFile(std::string_view relativePath) const {
 }
 
 std::filesystem::path
+GameToolService::ResolveNewGameFile(std::string_view relativePath) const {
+  const std::filesystem::path relative =
+      std::filesystem::path(relativePath).lexically_normal();
+  if (relative.empty() || relative.is_absolute() || !relative.has_filename())
+    throw std::runtime_error("Game path must be a relative file path.");
+  for (const auto &component : relative) {
+    if (component == ".." || component == "build")
+      throw std::runtime_error(
+          "Game path traversal and build access are not allowed.");
+  }
+  if (!IsCreatableSourceExtension(relative))
+    throw std::runtime_error("Only new .cpp and .h files may be created.");
+
+  const std::filesystem::path parent =
+      std::filesystem::weakly_canonical(gameRoot_ / relative.parent_path());
+  if (!IsPathInside(parent, gameRoot_) ||
+      !std::filesystem::is_directory(parent)) {
+    throw std::runtime_error(
+        "New Game files require an existing directory inside the active Game.");
+  }
+  const std::filesystem::path resolved = parent / relative.filename();
+  if (!IsPathInside(resolved, gameRoot_))
+    throw std::runtime_error("New Game file resolved outside the active Game.");
+  if (std::filesystem::exists(resolved))
+    throw std::runtime_error(
+        "Game file already exists; use apply_game_patch instead.");
+  return resolved;
+}
+
+std::filesystem::path
 GameToolService::ResolveEngineFile(std::string_view relativePath) const {
   const std::filesystem::path relative =
       std::filesystem::path(relativePath).lexically_normal();
@@ -602,8 +767,12 @@ std::string GameToolService::BuildGame() {
   std::scoped_lock lock(buildMutex_);
   Engine::Logger::Info("Controlled Game build started.");
 
-  const std::string command = "cmake --build \"" + buildDirectory_.string() +
-                              "\" --config Debug --target Game 2>&1";
+  const std::string quotedBuildDirectory =
+      "\"" + buildDirectory_.string() + "\"";
+  const std::string command =
+      "cmake --build " + quotedBuildDirectory +
+      " --config Debug --target ZERO_CHECK 2>&1 && cmake --build " +
+      quotedBuildDirectory + " --config Debug --target Game 2>&1";
 
   std::array<char, 4096> buffer{};
   std::string output;

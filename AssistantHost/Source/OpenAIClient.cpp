@@ -1,4 +1,4 @@
-#include "Engine/AI/OpenAIClient.h"
+#include "AssistantHost/OpenAIClient.h"
 
 #include <stdexcept>
 #include <string>
@@ -52,8 +52,8 @@ std::wstring ToWide(std::string_view value) {
 
 std::string PostResponses(const std::string &apiKey,
                           const std::string &requestBody,
-                          const Engine::OpenAIStreamCallback &onEvent,
-                          Engine::OpenAIResponse &response) {
+                          const AssistantHost::OpenAIStreamCallback &onEvent,
+                          AssistantHost::OpenAIResponse &response) {
   WinHttpHandle session(WinHttpOpen(
       L"MakeYourOwnGame.AI/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
       WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
@@ -122,16 +122,18 @@ std::string PostResponses(const std::string &apiKey,
 
     if (type == "response.created") {
       response.id = event.at("response").value("id", "");
-      onEvent({Engine::OpenAIStreamEventType::Status, "Response created."});
+      onEvent(
+          {AssistantHost::OpenAIStreamEventType::Status, "Response created."});
     } else if (type == "response.in_progress") {
-      onEvent({Engine::OpenAIStreamEventType::Status, "Model is working."});
+      onEvent(
+          {AssistantHost::OpenAIStreamEventType::Status, "Model is working."});
     } else if (type == "response.reasoning_summary_text.delta") {
-      onEvent({Engine::OpenAIStreamEventType::ReasoningSummaryDelta,
+      onEvent({AssistantHost::OpenAIStreamEventType::ReasoningSummaryDelta,
                event.value("delta", "")});
     } else if (type == "response.output_text.delta") {
       const std::string delta = event.value("delta", "");
       response.text += delta;
-      onEvent({Engine::OpenAIStreamEventType::OutputTextDelta, delta});
+      onEvent({AssistantHost::OpenAIStreamEventType::OutputTextDelta, delta});
     } else if (type == "response.output_item.done") {
       const nlohmann::json &item = event.at("item");
       if (item.value("type", "") == "function_call") {
@@ -156,7 +158,8 @@ std::string PostResponses(const std::string &apiKey,
               usage.at("input_tokens_details").value("cached_tokens", 0ULL);
         }
       }
-      onEvent({Engine::OpenAIStreamEventType::Status, "Response completed."});
+      onEvent({AssistantHost::OpenAIStreamEventType::Status,
+               "Response completed."});
     } else if (type == "response.failed" || type == "error") {
       throw std::runtime_error("OpenAI stream failed: " + event.dump());
     }
@@ -221,7 +224,7 @@ std::string PostResponses(const std::string &apiKey,
 #endif
 } // namespace
 
-namespace Engine {
+namespace AssistantHost {
 namespace {
 nlohmann::json CreateGameToolDefinitions() {
   const auto tool = [](const char *name, const char *description,
@@ -316,6 +319,26 @@ nlohmann::json CreateGameToolDefinitions() {
                  {"required", {"path", "oldText", "newText"}},
                  {"additionalProperties", false}}}}}},
             {"patches"}),
+       tool("create_game_code_file",
+            "Create one new UTF-8 C++ file inside the active Game. Only .cpp "
+            "and .h paths are accepted. Existing files are never overwritten, "
+            "and content is validated as C++ source text before writing.",
+            {{"path",
+              {{"type", "string"},
+               {"description", "New .cpp or .h path relative to the Game."}}},
+             {"content",
+              {{"type", "string"},
+               {"description", "Complete C++ source text for the new file."}}}},
+            {"path", "content"}),
+       tool("delete_game_code_file",
+            "Delete one existing .cpp or .h file inside the active Game. Use "
+            "only when the file is genuinely obsolete; this cannot target "
+            "Engine files, build output, or other extensions.",
+            {{"path",
+              {{"type", "string"},
+               {"description",
+                "Existing .cpp or .h path relative to the Game."}}}},
+            {"path"}),
        tool(
            "build_game",
            "Compile only the Debug Game DLL using the controlled CMake target.",
@@ -383,6 +406,11 @@ bool OpenAIClient::IsConfigured() const { return settings_.IsConfigured(); }
 
 const std::string &OpenAIClient::GetModel() const { return settings_.model; }
 
+const std::string &OpenAIClient::GetDisplayName() const {
+  static const std::string name = "OpenAI API";
+  return name;
+}
+
 OpenAICostEstimate
 OpenAIClient::EstimateCost(const OpenAITokenUsage &usage) const {
   return EstimateOpenAICost(settings_.model, settings_.pricing, usage);
@@ -427,4 +455,4 @@ OpenAIResponse OpenAIClient::ContinueWithToolOutputs(
   return SendResponseRequest(settings_, instructions, std::move(input),
                              previousResponseId, onEvent, allowTools);
 }
-} // namespace Engine
+} // namespace AssistantHost

@@ -8,3 +8,4 @@
 *.user
 *.suo
 /AssistantHost/Config/settings.json
+/AssistantProviders/OpenAI/OpenAIProvider.settings.json

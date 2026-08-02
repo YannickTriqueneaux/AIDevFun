@@ -1,6 +1,8 @@
 #include "Game/Game.h"
 
+#include "Game/GameAudio.h"
 #include "Game/GameConfig.h"
+#include "Game/VectorArt.h"
 
 #include "Engine/Core/Profile.h"
 #include "Engine/Graphics/RenderContext.h"
@@ -41,256 +43,14 @@ constexpr float EnemyRadius = 17.0f;
 constexpr float ProjectileRadius = 4.0f;
 constexpr std::size_t MaximumEnemies = 288;
 constexpr int PlayerMaxHealth = 20;
+constexpr float FootstepIntervalSeconds = 0.31f;
 constexpr Engine::Color White{255, 255, 255, 255};
 
-static constexpr std::string_view GroundSvg = R"svg(
-<svg viewBox="0 0 100 100">
-  <g id="base"><rect x="0" y="0" width="100" height="100" fill="#74CFA0"/><rect x="0" y="0" width="100" height="100" fill="#8BDBA8" opacity="0.38"/></g>
-  <g id="moss"><rect x="12" y="18" width="3" height="7" fill="#4EB87D" opacity="0.60"/><rect x="16" y="21" width="3" height="5" fill="#A9E8B8" opacity="0.55"/><rect x="42" y="72" width="4" height="8" fill="#4EB87D" opacity="0.48"/><rect x="78" y="38" width="3" height="7" fill="#A9E8B8" opacity="0.50"/><rect x="66" y="83" width="6" height="3" fill="#5FC98C" opacity="0.45"/></g>
-  <g id="veins"><line x1="8" y1="52" x2="22" y2="52" stroke="#5FC98C" stroke-width="1" opacity="0.22"/><line x1="54" y1="18" x2="66" y2="18" stroke="#BDEFC6" stroke-width="1" opacity="0.18"/><line x1="30" y1="38" x2="40" y2="38" stroke="#5FC98C" stroke-width="1" opacity="0.18"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 3> GroundGroups{"base", "moss", "veins"};
-
-static constexpr std::string_view RoadSvg = R"svg(
-<svg viewBox="0 0 100 24">
-  <g id="pavement"><rect x="0" y="0" width="100" height="24" fill="#8B6F3E"/><rect x="0" y="3" width="100" height="18" fill="#C8A85D"/><rect x="0" y="11" width="100" height="2" fill="#9A7C45" opacity="0.70"/></g>
-  <g id="glow"><line x1="0" y1="3" x2="100" y2="3" stroke="#F1D88A" stroke-width="2" opacity="0.58"/><line x1="0" y1="21" x2="100" y2="21" stroke="#5C4A32" stroke-width="2" opacity="0.72"/></g>
-  <g id="dash"><line x1="16" y1="4" x2="16" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="36" y1="4" x2="36" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="56" y1="4" x2="56" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><line x1="76" y1="4" x2="76" y2="20" stroke="#7B6137" stroke-width="2" opacity="0.82"/><rect x="8" y="6" width="2" height="2" fill="#FFE9A5"/><rect x="27" y="17" width="2" height="2" fill="#FFE9A5"/><rect x="69" y="7" width="2" height="2" fill="#FFE9A5"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 3> RoadGroups{"pavement", "glow", "dash"};
-
-static constexpr std::string_view HouseSvg = R"svg(
-<svg viewBox="0 0 120 120">
-  <g id="shadow"><ellipse cx="60" cy="108" rx="50" ry="9" fill="#050816" opacity="0.35"/></g>
-  <g id="body"><rect x="14" y="44" width="92" height="64" fill="#F8F1C9"/><rect x="20" y="50" width="80" height="52" fill="#DDBB86" opacity="0.35"/></g>
-  <g id="roof"><polygon points="8,48 60,10 112,48" fill="#FF4FD8"/><rect x="20" y="36" width="80" height="18" fill="#8A5CFF"/></g>
-  <g id="windows"><rect x="27" y="60" width="19" height="18" fill="#00E5FF"/><rect x="74" y="60" width="19" height="18" fill="#00E5FF"/><line x1="36" y1="60" x2="36" y2="78" stroke="#F8F871" stroke-width="2"/><line x1="83" y1="60" x2="83" y2="78" stroke="#F8F871" stroke-width="2"/></g>
-  <g id="door"><rect x="51" y="74" width="20" height="34" fill="#51344D"/><circle cx="66" cy="91" r="2" fill="#F8F871"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 5> HouseGroups{"shadow", "body", "roof", "windows", "door"};
-
-static constexpr std::string_view SignSvg = R"svg(
-<svg viewBox="0 0 80 60">
-  <g id="post"><rect x="37" y="24" width="6" height="34" fill="#51344D"/></g>
-  <g id="board"><rect x="6" y="4" width="68" height="28" fill="#F8F1C9"/><line x1="6" y1="4" x2="74" y2="4" stroke="#00E5FF" stroke-width="3"/><line x1="6" y1="32" x2="74" y2="32" stroke="#FF4FD8" stroke-width="3"/></g>
-  <g id="spark"><circle cx="67" cy="8" r="3" fill="#F8F871"/><circle cx="13" cy="28" r="2" fill="#F8F871"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 3> SignGroups{"post", "board", "spark"};
-
-static constexpr std::string_view FlowerSvg = R"svg(
-<svg viewBox="0 0 32 40">
-  <g id="stem"><line x1="16" y1="18" x2="16" y2="38" stroke="#2DD36F" stroke-width="3"/><ellipse cx="10" cy="29" rx="6" ry="3" fill="#39FFB6"/><ellipse cx="22" cy="32" rx="6" ry="3" fill="#39FFB6"/></g>
-  <g id="petals"><circle cx="16" cy="10" r="5" fill="#F8F871"/><circle cx="8" cy="14" r="5" fill="#FF4FD8"/><circle cx="24" cy="14" r="5" fill="#8A5CFF"/><circle cx="16" cy="20" r="5" fill="#00E5FF"/></g>
-  <g id="heart"><circle cx="16" cy="15" r="4" fill="#F8F1C9"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 3> FlowerGroups{"stem", "petals", "heart"};
-
-static constexpr std::string_view WaterSvg = R"svg(
-<svg viewBox="0 0 100 60">
-  <g id="pool"><rect x="0" y="0" width="100" height="60" fill="#3F79D1"/><rect x="0" y="0" width="100" height="60" fill="#5B98E1" opacity="0.35"/></g>
-  <g id="waves"><polyline points="2,12 10,7 18,12 26,7 34,12 42,7 50,12 58,7 66,12 74,7 82,12 90,7 98,12" stroke="#73B7E8" stroke-width="2" fill="none" opacity="0.65"/><polyline points="0,30 8,25 16,30 24,25 32,30 40,25 48,30 56,25 64,30 72,25 80,30 88,25 96,30" stroke="#2F6FC5" stroke-width="2" fill="none" opacity="0.38"/><polyline points="2,48 10,43 18,48 26,43 34,48 42,43 50,48 58,43 66,48 74,43 82,48 90,43 98,48" stroke="#73B7E8" stroke-width="2" fill="none" opacity="0.55"/></g>
-  <g id="shine"><rect x="74" y="10" width="4" height="4" fill="#A8DFFF" opacity="0.75"/><rect x="30" y="42" width="3" height="3" fill="#A8DFFF" opacity="0.55"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 3> WaterGroups{"pool", "waves", "shine"};
-
-static constexpr std::string_view TreeSvg = R"svg(
-<svg viewBox="0 0 56 76">
-  <g id="shadow"><ellipse cx="28" cy="70" rx="17" ry="5" fill="#31583D" opacity="0.30"/></g>
-  <g id="trunk"><rect x="22" y="45" width="12" height="21" fill="#5F4631"/><rect x="25" y="45" width="6" height="21" fill="#8B6A42"/></g>
-  <g id="crown"><circle cx="28" cy="21" r="20" fill="#2F7F48"/><circle cx="17" cy="33" r="15" fill="#3E9959"/><circle cx="39" cy="33" r="15" fill="#2D7442"/><circle cx="28" cy="39" r="16" fill="#34894E"/><rect x="17" y="12" width="8" height="5" fill="#BDEFC6" opacity="0.70"/><rect x="8" y="30" width="6" height="4" fill="#8EDC95" opacity="0.62"/><rect x="34" y="22" width="8" height="5" fill="#8EDC95" opacity="0.55"/></g>
-  <g id="fruit"><rect x="18" y="24" width="4" height="4" fill="#D94F45"/><rect x="38" y="19" width="4" height="4" fill="#F4D35E"/><rect x="30" y="42" width="4" height="4" fill="#D94F45"/></g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 4> TreeGroups{"shadow", "trunk", "crown", "fruit"};
-
-static constexpr std::string_view PlayerSvg = R"svg(
-<svg viewBox="0 0 64 80">
-  <g id="shadow"><ellipse cx="32" cy="73" rx="15" ry="5" fill="#31583D" opacity="0.32"/></g>
-  <g id="left_leg">
-    <rect x="24" y="55" width="7" height="13" fill="#26334F"/>
-    <rect x="22" y="67" width="10" height="4" fill="#2D2D34"/>
-  </g>
-  <g id="right_leg">
-    <rect x="34" y="55" width="7" height="13" fill="#26334F"/>
-    <rect x="34" y="67" width="10" height="4" fill="#2D2D34"/>
-  </g>
-  <g id="body">
-    <rect x="20" y="36" width="24" height="20" fill="#2D2D34"/>
-    <rect x="22" y="38" width="20" height="16" fill="#5C6FCB"/>
-    <rect x="24" y="38" width="16" height="6" fill="#F4F1E8"/>
-    <rect x="15" y="39" width="7" height="16" fill="#2D2D34"/>
-    <rect x="16" y="41" width="4" height="12" fill="#FFD2A1"/>
-    <rect x="42" y="39" width="7" height="16" fill="#2D2D34"/>
-    <rect x="44" y="41" width="4" height="12" fill="#FFD2A1"/>
-    <rect x="18" y="34" width="7" height="18" fill="#8B4E8E"/>
-  </g>
-  <g id="head">
-    <rect x="22" y="18" width="20" height="18" fill="#2D2D34"/>
-    <rect x="24" y="20" width="16" height="14" fill="#FFD2A1"/>
-    <rect x="27" y="33" width="10" height="3" fill="#E8A06D"/>
-  </g>
-  <g id="hat">
-    <rect x="20" y="12" width="24" height="8" fill="#C63D32"/>
-    <rect x="24" y="8" width="14" height="5" fill="#E65645"/>
-    <rect x="38" y="15" width="7" height="4" fill="#F4F1E8"/>
-    <rect x="18" y="19" width="14" height="4" fill="#C63D32"/>
-  </g>
-  <g id="eyes">
-    <rect x="27" y="25" width="3" height="3" fill="#2D2D34"/>
-    <rect x="35" y="25" width="3" height="3" fill="#2D2D34"/>
-    <rect x="30" y="31" width="5" height="2" fill="#B54A42"/>
-  </g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 7> PlayerGroups{"shadow", "left_leg", "right_leg", "body", "head", "hat", "eyes"};
-
-enum class PlayerGroup : std::size_t { Shadow, LeftLeg, RightLeg, Body, Head, Hat, Eyes, Count };
-
-static constexpr std::string_view NpcSvg = R"svg(
-<svg viewBox="0 0 64 80">
-  <g id="shadow"><ellipse cx="32" cy="73" rx="16" ry="5" fill="#050816" opacity="0.26"/></g>
-  <g id="legs">
-    <rect x="23" y="55" width="7" height="13" fill="#050816"/>
-    <rect x="24" y="55" width="5" height="11" fill="#FFD2A1"/>
-    <rect x="34" y="55" width="7" height="13" fill="#050816"/>
-    <rect x="35" y="55" width="5" height="11" fill="#FFD2A1"/>
-    <rect x="20" y="67" width="11" height="4" fill="#050816"/>
-    <rect x="33" y="67" width="11" height="4" fill="#050816"/>
-  </g>
-  <g id="body">
-    <rect x="18" y="33" width="28" height="24" fill="#050816"/>
-    <rect x="20" y="35" width="24" height="20" fill="#FF6BCB"/>
-    <rect x="24" y="39" width="16" height="4" fill="#F8F8F0"/>
-    <rect x="15" y="36" width="6" height="17" fill="#050816"/>
-    <rect x="16" y="38" width="4" height="13" fill="#FFD2A1"/>
-    <rect x="43" y="36" width="6" height="17" fill="#050816"/>
-    <rect x="44" y="38" width="4" height="13" fill="#FFD2A1"/>
-  </g>
-  <g id="head">
-    <rect x="21" y="13" width="22" height="21" fill="#050816"/>
-    <rect x="24" y="17" width="16" height="15" fill="#FFD2A1"/>
-    <rect x="27" y="31" width="10" height="3" fill="#E8A06D"/>
-  </g>
-  <g id="hair">
-    <rect x="19" y="10" width="24" height="9" fill="#050816"/>
-    <rect x="17" y="18" width="8" height="12" fill="#050816"/>
-    <rect x="39" y="18" width="8" height="12" fill="#050816"/>
-    <rect x="28" y="8" width="8" height="4" fill="#050816"/>
-  </g>
-  <g id="eyes">
-    <rect x="27" y="22" width="3" height="3" fill="#050816"/>
-    <rect x="35" y="22" width="3" height="3" fill="#050816"/>
-    <rect x="30" y="28" width="5" height="2" fill="#D94F45"/>
-  </g>
-</svg>
-)svg";
-static constexpr std::array<std::string_view, 6> NpcGroups{"shadow", "legs", "body", "head", "hair", "eyes"};
-
-enum class NpcGroup : std::size_t { Shadow, Legs, Body, Head, Hair, Eyes, Count };
-
-template <std::size_t Count>
-std::array<Engine::VectorShapeGroupID, Count>
-LoadShape(Engine::VectorShape &shape, std::string_view svg,
-          const std::array<std::string_view, Count> &groups) {
-  if (!shape.LoadFromSvg(svg) || !shape.Upload())
-    throw std::runtime_error(shape.GetLastError());
-  auto ids = shape.ResolveGroups(groups);
-  for (std::size_t index = 0; index < ids.size(); ++index) {
-    if (!ids[index].IsValid())
-      throw std::runtime_error("Missing SVG group: " + std::string(groups[index]));
-  }
-  return ids;
-}
-
-} // namespace
-
-struct ArtResources {
-  Engine::VectorShape ground;
-  Engine::VectorShape road;
-  Engine::VectorShape house;
-  Engine::VectorShape sign;
-  Engine::VectorShape flower;
-  Engine::VectorShape water;
-  Engine::VectorShape tree;
-  Engine::VectorShape player;
-  Engine::VectorShape npc;
-
-  std::array<Engine::VectorShapeGroupID, GroundGroups.size()> groundGroups{};
-  std::array<Engine::VectorShapeGroupID, RoadGroups.size()> roadGroups{};
-  std::array<Engine::VectorShapeGroupID, HouseGroups.size()> houseGroups{};
-  std::array<Engine::VectorShapeGroupID, SignGroups.size()> signGroups{};
-  std::array<Engine::VectorShapeGroupID, FlowerGroups.size()> flowerGroups{};
-  std::array<Engine::VectorShapeGroupID, WaterGroups.size()> waterGroups{};
-  std::array<Engine::VectorShapeGroupID, TreeGroups.size()> treeGroups{};
-  std::array<Engine::VectorShapeGroupID, PlayerGroups.size()> playerGroups{};
-  std::array<Engine::VectorShapeGroupID, NpcGroups.size()> npcGroups{};
-
-  std::unique_ptr<Engine::VectorShapePose> roadPose;
-  std::unique_ptr<Engine::VectorShapePose> housePose;
-  std::unique_ptr<Engine::VectorShapePose> signPose;
-  std::unique_ptr<Engine::VectorShapePose> flowerPose;
-  std::unique_ptr<Engine::VectorShapePose> waterPose;
-  std::unique_ptr<Engine::VectorShapePose> treePose;
-  std::unique_ptr<Engine::VectorShapePose> playerPose;
-  std::unique_ptr<Engine::VectorShapePose> npcPose;
-  bool ready = false;
-
-  void Initialize() {
-    Shutdown();
-    groundGroups = LoadShape(ground, GroundSvg, GroundGroups);
-    roadGroups = LoadShape(road, RoadSvg, RoadGroups);
-    houseGroups = LoadShape(house, HouseSvg, HouseGroups);
-    signGroups = LoadShape(sign, SignSvg, SignGroups);
-    flowerGroups = LoadShape(flower, FlowerSvg, FlowerGroups);
-    waterGroups = LoadShape(water, WaterSvg, WaterGroups);
-    treeGroups = LoadShape(tree, TreeSvg, TreeGroups);
-    playerGroups = LoadShape(player, PlayerSvg, PlayerGroups);
-    npcGroups = LoadShape(npc, NpcSvg, NpcGroups);
-    roadPose = std::make_unique<Engine::VectorShapePose>(road);
-    housePose = std::make_unique<Engine::VectorShapePose>(house);
-    signPose = std::make_unique<Engine::VectorShapePose>(sign);
-    flowerPose = std::make_unique<Engine::VectorShapePose>(flower);
-    waterPose = std::make_unique<Engine::VectorShapePose>(water);
-    treePose = std::make_unique<Engine::VectorShapePose>(tree);
-    playerPose = std::make_unique<Engine::VectorShapePose>(player);
-    npcPose = std::make_unique<Engine::VectorShapePose>(npc);
-    ready = true;
-  }
-
-  void Shutdown() {
-    ready = false;
-    npcPose.reset();
-    playerPose.reset();
-    treePose.reset();
-    waterPose.reset();
-    flowerPose.reset();
-    signPose.reset();
-    housePose.reset();
-    roadPose.reset();
-    npc.Unload();
-    player.Unload();
-    tree.Unload();
-    water.Unload();
-    flower.Unload();
-    sign.Unload();
-    house.Unload();
-    road.Unload();
-    ground.Unload();
-  }
-};
-
-namespace {
-void DrawVectorArt(Engine::Renderer2D &renderer, const Engine::VectorShape &shape,
-                   Engine::Vector2 center, Engine::Vector2 size,
+void DrawVectorArt(Engine::Renderer2D &renderer,
+                   const Engine::VectorShape &shape, Engine::Vector2 center,
+                   Engine::Vector2 size,
                    const Engine::VectorShapePose *pose = nullptr,
-                   float rotationDegrees = 0.0f,
-                   Engine::Color tint = White) {
+                   float rotationDegrees = 0.0f, Engine::Color tint = White) {
   if (center.x < -size.x || center.y < -size.y ||
       center.x > static_cast<float>(renderer.GetWidth()) + size.x ||
       center.y > static_cast<float>(renderer.GetHeight()) + size.y)
@@ -304,13 +64,19 @@ void DrawVectorArt(Engine::Renderer2D &renderer, const Engine::VectorShape &shap
   renderer.DrawVectorShape(shape, draw);
 }
 
-Engine::VectorShapeGroupID PlayerGroupId(const ArtResources &art,
+Engine::VectorShapeGroupID PlayerGroupId(const VectorArtResources &art,
                                          PlayerGroup group) {
   return art.playerGroups[static_cast<std::size_t>(group)];
 }
 
-Engine::VectorShapeGroupID NpcGroupId(const ArtResources &art, NpcGroup group) {
+Engine::VectorShapeGroupID NpcGroupId(const VectorArtResources &art,
+                                      NpcGroup group) {
   return art.npcGroups[static_cast<std::size_t>(group)];
+}
+
+Engine::VectorShapeGroupID DragonGroupId(const VectorArtResources &art,
+                                         DragonGroup group) {
+  return art.dragonGroups[static_cast<std::size_t>(group)];
 }
 
 float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
@@ -343,6 +109,18 @@ void DrawRectOutline(Engine::Renderer2D &renderer, Engine::Vector2 topLeft,
   renderer.DrawLine(topLeft, {topLeft.x, topLeft.y + size.y}, thickness, color);
   renderer.DrawLine({topLeft.x + size.x, topLeft.y},
                     {topLeft.x + size.x, topLeft.y + size.y}, thickness, color);
+}
+
+bool WasVirtualKeyPressed(int virtualKey, bool &wasDown) {
+#if defined(_WIN32)
+  const bool down = (::GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+#else
+  (void)virtualKey;
+  const bool down = false;
+#endif
+  const bool pressed = down && !wasDown;
+  wasDown = down;
+  return pressed;
 }
 
 Engine::Vector2 WorldToScreen(Engine::Vector2 world, Engine::Vector2 camera) {
@@ -500,6 +278,21 @@ struct NpcData {
   const char *dialog;
 };
 
+static constexpr std::array<NpcData, 4> Npcs{{
+    {{1960.0f, 655.0f}, {190, 48, 80, 255}, "Hi! Welcome to the village."},
+    {{1510.0f, 575.0f}, {80, 90, 160, 255}, "The houses block the path."},
+    {{2360.0f, 790.0f}, {48, 98, 48, 255}, "The lake is calm today."},
+    {{3140.0f, 775.0f}, {245, 205, 92, 255}, "Keep going east!"},
+}};
+
+int NearbyNpcIndex(Engine::Vector2 playerPosition) {
+  for (std::size_t index = 0; index < Npcs.size(); ++index) {
+    if (DistanceSquared(playerPosition, Npcs[index].position) <= 72.0f * 72.0f)
+      return static_cast<int>(index);
+  }
+  return -1;
+}
+
 void DrawDialogBubble(Engine::Renderer2D &renderer, Engine::Vector2 anchor,
                       std::string_view text) {
   const Engine::Vector2 bubble{anchor.x - 142.0f, anchor.y - 92.0f};
@@ -556,6 +349,37 @@ void DrawPlayerSprite(Engine::Renderer2D &renderer, Engine::Vector2 center,
                  {4.0f, 4.0f}, {15, 18, 28, 255});
   DrawFilledRect(renderer, {center.x + 3.0f + eyeX, center.y - 20.0f + eyeY},
                  {4.0f, 4.0f}, {15, 18, 28, 255});
+}
+
+void DrawKnightSprite(Engine::Renderer2D &renderer, Engine::Vector2 center,
+                      float attackFlash) {
+  renderer.DrawCircle({center.x, center.y + 17.0f}, 15.0f, {48, 56, 36, 85});
+  DrawFilledRect(renderer, {center.x - 9.0f, center.y + 6.0f}, {6.0f, 15.0f},
+                 {48, 48, 58, 255});
+  DrawFilledRect(renderer, {center.x + 3.0f, center.y + 6.0f}, {6.0f, 15.0f},
+                 {48, 48, 58, 255});
+  DrawFilledRect(renderer, {center.x - 13.0f, center.y - 14.0f}, {26.0f, 24.0f},
+                 {160, 170, 180, 255});
+  DrawRectOutline(renderer, {center.x - 13.0f, center.y - 14.0f}, {26.0f, 24.0f},
+                  2.0f, {70, 78, 88, 255});
+  DrawFilledRect(renderer, {center.x - 9.0f, center.y - 34.0f}, {18.0f, 18.0f},
+                 {185, 195, 205, 255});
+  DrawFilledRect(renderer, {center.x - 13.0f, center.y - 38.0f}, {26.0f, 8.0f},
+                 {105, 115, 128, 255});
+  DrawFilledRect(renderer, {center.x - 5.0f, center.y - 27.0f}, {10.0f, 3.0f},
+                 {15, 18, 28, 255});
+  renderer.DrawLine({center.x + 12.0f, center.y - 10.0f},
+                    {center.x + 34.0f, center.y - 28.0f}, 4.0f,
+                    {220, 226, 232, 255});
+  renderer.DrawLine({center.x + 9.0f, center.y - 7.0f},
+                    {center.x + 18.0f, center.y - 1.0f}, 5.0f,
+                    {92, 64, 48, 255});
+  if (attackFlash > 0.0f) {
+    const float alpha = std::clamp(attackFlash / 0.42f, 0.0f, 1.0f);
+    renderer.DrawLine({center.x + 24.0f, center.y - 32.0f},
+                      {center.x + 62.0f, center.y + 4.0f}, 6.0f,
+                      {245, 245, 210, static_cast<std::uint8_t>(220.0f * alpha)});
+  }
 }
 
 int MaxHealthForFaction(BaseGame::Faction faction) {
@@ -625,10 +449,42 @@ void DrawHealthBar(Engine::Renderer2D &renderer, Engine::Vector2 center,
     renderer.DrawLine(start, fillEnd, height, HealthColor(ratio));
   }
 }
+
+void DrawSettingsMenu(Engine::Renderer2D &renderer, float volume) {
+  const float width = 420.0f;
+  const float height = 178.0f;
+  const Engine::Vector2 topLeft{
+      static_cast<float>(renderer.GetWidth()) * 0.5f - width * 0.5f,
+      static_cast<float>(renderer.GetHeight()) * 0.5f - height * 0.5f};
+  DrawFilledRect(renderer, topLeft, {width, height}, {5, 8, 22, 235});
+  DrawRectOutline(renderer, topLeft, {width, height}, 4.0f, {245, 205, 92, 255});
+  renderer.DrawText("SETTINGS", {topLeft.x + 142.0f, topLeft.y + 18.0f}, 28,
+                    {245, 245, 210, 255});
+  renderer.DrawText("Volume", {topLeft.x + 34.0f, topLeft.y + 72.0f}, 20,
+                    {245, 245, 210, 255});
+
+  const float barWidth = 260.0f;
+  const Engine::Vector2 barTopLeft{topLeft.x + 126.0f, topLeft.y + 78.0f};
+  DrawFilledRect(renderer, barTopLeft, {barWidth, 18.0f}, {48, 56, 70, 255});
+  DrawFilledRect(renderer, barTopLeft,
+                 {barWidth * std::clamp(volume, 0.0f, 1.0f), 18.0f},
+                 {74, 203, 92, 255});
+  DrawRectOutline(renderer, barTopLeft, {barWidth, 18.0f}, 2.0f,
+                  {245, 245, 210, 255});
+
+  const int percent = static_cast<int>(std::round(std::clamp(volume, 0.0f, 1.0f) * 100.0f));
+  renderer.DrawText(std::to_string(percent) + "%", {topLeft.x + 316.0f, topLeft.y + 106.0f},
+                    18, {245, 245, 210, 255});
+  renderer.DrawText("Left/Right: change   M: close",
+                    {topLeft.x + 54.0f, topLeft.y + 136.0f}, 18,
+                    {190, 210, 190, 255});
+}
 } // namespace
 
 ProceduralGame::ProceduralGame()
-    : world_(*gameInstance_.GetWorld()), art_(std::make_unique<ArtResources>()) {
+    : world_(*gameInstance_.GetWorld()),
+      art_(std::make_unique<VectorArtResources>()),
+      audio_(std::make_unique<AudioResources>()) {
   RegisterGameplayTypes();
   EnsureCoreEntities();
 }
@@ -638,9 +494,15 @@ ProceduralGame::~ProceduralGame() = default;
 void ProceduralGame::Initialize() {
   if (art_)
     art_->Initialize();
+  if (audio_) {
+    audio_->Initialize();
+    audio_->SetMasterVolume(audioVolume_);
+  }
 }
 
 void ProceduralGame::Shutdown() {
+  if (audio_)
+    audio_->Shutdown();
   if (art_)
     art_->Shutdown();
 }
@@ -652,6 +514,12 @@ void ProceduralGame::RegisterGameplayTypes() {
   world_.RegisterComponent(
       Engine::Gameplay::MakeComponentType<BaseGame::PlayerMovement>(
           "PlayerMovement"));
+  world_.RegisterComponent(
+      Engine::Gameplay::MakeComponentType<BaseGame::DragonFollower>(
+          "DragonFollower"));
+  world_.RegisterComponent(
+      Engine::Gameplay::MakeComponentType<BaseGame::KnightVisitor>(
+          "KnightVisitor"));
   world_.RegisterComponent(
       Engine::Gameplay::MakeComponentType<BaseGame::EnemyMovement>(
           "EnemyMovement"));
@@ -679,6 +547,10 @@ void ProceduralGame::RegisterGameplayTypes() {
        {BaseGame::PlayerMovement::Type, BaseGame::PlayerWeapon::Type,
         BaseGame::Health::Type}});
   world_.RegisterEntity(
+      {BaseGame::DragonEntityType, "Dragon", {BaseGame::DragonFollower::Type}});
+  world_.RegisterEntity(
+      {BaseGame::KnightEntityType, "Knight", {BaseGame::KnightVisitor::Type}});
+  world_.RegisterEntity(
       {BaseGame::EnemyEntityType,
        "Enemy",
        {BaseGame::EnemyMovement::Type, BaseGame::EnemyWeapon::Type,
@@ -693,6 +565,8 @@ void ProceduralGame::RegisterGameplayTypes() {
 
 void ProceduralGame::EnsureCoreEntities() {
   Entity *player = nullptr;
+  Entity *dragon = nullptr;
+  Entity *knight = nullptr;
   for (const ObjectID id : world_.Entities()) {
     auto *entity = ObjectRef(id).Resolve();
     if (!entity)
@@ -706,6 +580,12 @@ void ProceduralGame::EnsureCoreEntities() {
     if (entity->GetTypeID() == BaseGame::PlayerEntityType) {
       player = entity;
       playerEntity_ = ObjectRef(id);
+    } else if (entity->GetTypeID() == BaseGame::DragonEntityType) {
+      dragon = entity;
+      dragonEntity_ = ObjectRef(id);
+    } else if (entity->GetTypeID() == BaseGame::KnightEntityType) {
+      knight = entity;
+      knightEntity_ = ObjectRef(id);
     } else if (entity->GetTypeID() == BaseGame::ArenaDirectorEntityType) {
       arenaDirector_ = entity->GetComponent<BaseGame::ArenaDirector>();
     }
@@ -734,12 +614,69 @@ void ProceduralGame::EnsureCoreEntities() {
   playerMovement_ = player->GetComponent<BaseGame::PlayerMovement>();
   playerWeapon_ = player->GetComponent<BaseGame::PlayerWeapon>();
   playerHealth_ = player->GetComponent<BaseGame::Health>();
+
+  if (!dragon) {
+    dragonEntity_ = world_.Spawn(BaseGame::DragonEntityType, "LittleDragon");
+    world_.FlushSpawns();
+    dragon = dragonEntity_.Resolve();
+    dragon->transform.position = {player->transform.position.x - 58.0f,
+                                  player->transform.position.y - 34.0f};
+  }
+  dragonFollower_ = dragon->GetComponent<BaseGame::DragonFollower>();
+  if (auto *follower = dragonFollower_.Resolve())
+    follower->SetTarget(playerEntity_);
+
+  if (!knight) {
+    knightEntity_ = world_.Spawn(BaseGame::KnightEntityType, "PassingKnight");
+    world_.FlushSpawns();
+    knight = knightEntity_.Resolve();
+    knight->transform.position = {player->transform.position.x - 360.0f,
+                                  player->transform.position.y + 24.0f};
+  }
+  knightVisitor_ = knight->GetComponent<BaseGame::KnightVisitor>();
+  if (auto *visitor = knightVisitor_.Resolve())
+    visitor->SetTarget(dragonEntity_);
 }
 
 void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
   ENGINE_PROFILE_SCOPE("BaseGame Update");
   visualTime_ += deltaTime;
-  const PlayerCommand command = inputBindings_.BuildPlayerCommand(input);
+  if (audio_)
+    audio_->Update();
+  if (WasVirtualKeyPressed('M', mKeyWasDown_)) {
+    settingsMenuOpen_ = !settingsMenuOpen_;
+  }
+  if (settingsMenuOpen_) {
+#if defined(_WIN32)
+    const bool volumeUp = WasVirtualKeyPressed(VK_RIGHT, volumeUpKeyWasDown_);
+    const bool volumeDown = WasVirtualKeyPressed(VK_LEFT, volumeDownKeyWasDown_);
+#else
+    const bool volumeUp = WasVirtualKeyPressed(0, volumeUpKeyWasDown_);
+    const bool volumeDown = WasVirtualKeyPressed(0, volumeDownKeyWasDown_);
+#endif
+    if (volumeUp || volumeDown) {
+      audioVolume_ = std::clamp(audioVolume_ + (volumeUp ? 0.1f : -0.1f),
+                                0.0f, 1.0f);
+      if (audio_)
+        audio_->SetMasterVolume(audioVolume_);
+    }
+  } else {
+    volumeUpKeyWasDown_ = false;
+    volumeDownKeyWasDown_ = false;
+  }
+
+  const PlayerCommand command =
+      settingsMenuOpen_ ? PlayerCommand{} : inputBindings_.BuildPlayerCommand(input);
+  playerWalking_ = command.movement.x != 0.0f || command.movement.y != 0.0f;
+  footstepCooldown_ = std::max(0.0f, footstepCooldown_ - deltaTime);
+  if (playerWalking_ && footstepCooldown_ <= 0.0f) {
+    if (audio_ && audio_->ready)
+      audio_->PlayFootstep(leftFootstep_);
+    leftFootstep_ = !leftFootstep_;
+    footstepCooldown_ = FootstepIntervalSeconds;
+  } else if (!playerWalking_) {
+    footstepCooldown_ = 0.0f;
+  }
   auto *movement = playerMovement_.Resolve();
   auto *weapon = playerWeapon_.Resolve();
   if (movement) {
@@ -753,6 +690,15 @@ void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
   world_.Update(deltaTime);
   ProcessCollisionsAndLifetime();
   ProcessFrameRequests();
+
+  int nearbyNpcIndex = -1;
+  if (const auto *player = playerEntity_.Resolve())
+    nearbyNpcIndex = NearbyNpcIndex(player->transform.position);
+  if (nearbyNpcIndex != activeNpcIndex_) {
+    activeNpcIndex_ = nearbyNpcIndex;
+    if (nearbyNpcIndex >= 0 && audio_ && audio_->ready)
+      audio_->PlayNpcVoice(static_cast<std::size_t>(nearbyNpcIndex));
+  }
 }
 
 ObjectRef ProceduralGame::SpawnEnemy(Engine::Vector2 position) {
@@ -790,7 +736,15 @@ ObjectRef ProceduralGame::SpawnProjectile(TypeID type, Engine::Vector2 position,
 }
 
 void ProceduralGame::ProcessFrameRequests() {
-  // Mini RPG mode: no arena spawns, no weapons, no combat projectiles.
+  for (const ObjectID id : world_.Entities()) {
+    auto *entity = ObjectRef(id).Resolve();
+    if (!entity || entity->GetTypeID() != BaseGame::KnightEntityType)
+      continue;
+    auto *knight = entity->GetComponent<BaseGame::KnightVisitor>().Resolve();
+    auto *dragon = dragonFollower_.Resolve();
+    if (knight && dragon && knight->ConsumeDragonAttack())
+      dragon->Kill();
+  }
 }
 
 void ProceduralGame::ProcessCollisionsAndLifetime() {
@@ -816,11 +770,11 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
   ENGINE_PROFILE_SCOPE("Mini RPG Render");
   Engine::Renderer2D &renderer = context.Draw2D();
   if (!art_ || !art_->ready) {
-    renderer.DrawText("Chargement des SVG...", {24.0f, 24.0f}, 22,
+    renderer.DrawText("Loading SVGs...", {24.0f, 24.0f}, 22,
                       {235, 245, 210, 255});
     return;
   }
-  const ArtResources &art = *art_;
+  const VectorArtResources &art = *art_;
 
   const auto *player = playerEntity_.Resolve();
   const Engine::Vector2 playerPosition =
@@ -839,13 +793,14 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
        y < camera.y + static_cast<float>(renderer.GetHeight()) + GroundTileSize;
        y += GroundTileSize) {
     for (float x = firstGroundX;
-         x < camera.x + static_cast<float>(renderer.GetWidth()) + GroundTileSize;
+         x <
+         camera.x + static_cast<float>(renderer.GetWidth()) + GroundTileSize;
          x += GroundTileSize) {
-      DrawVectorArt(renderer, art.ground,
-                    WorldToScreen({x + GroundTileSize * 0.5f,
-                                   y + GroundTileSize * 0.5f},
-                                  camera),
-                    {GroundTileSize, GroundTileSize});
+      DrawVectorArt(
+          renderer, art.ground,
+          WorldToScreen({x + GroundTileSize * 0.5f, y + GroundTileSize * 0.5f},
+                        camera),
+          {GroundTileSize, GroundTileSize});
     }
   }
 
@@ -871,17 +826,18 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
            false);
   drawRoad({540.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
            true);
-  drawRoad({1160.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
-           true);
-  drawRoad({2040.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
-           true);
-  drawRoad({3180.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
-           true);
+  drawRoad({1160.0f, 0.0f},
+           {74.0f, static_cast<float>(GameConfig::WorldHeight)}, true);
+  drawRoad({2040.0f, 0.0f},
+           {74.0f, static_cast<float>(GameConfig::WorldHeight)}, true);
+  drawRoad({3180.0f, 0.0f},
+           {74.0f, static_cast<float>(GameConfig::WorldHeight)}, true);
 
   auto drawHouse = [&](Engine::Vector2 origin, float hueShift) {
     art.housePose->Reset();
     Engine::VectorShapeTransform windows;
-    windows.opacity = 0.68f + 0.32f * (0.5f + 0.5f * std::sin(visualTime_ * 3.0f + hueShift));
+    windows.opacity =
+        0.68f + 0.32f * (0.5f + 0.5f * std::sin(visualTime_ * 3.0f + hueShift));
     art.housePose->SetGroupTransform(art.houseGroups[3], windows);
     DrawVectorArt(renderer, art.house,
                   WorldToScreen({origin.x + 60.0f, origin.y + 60.0f}, camera),
@@ -893,8 +849,8 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
     crown.rotationDegrees = std::sin(visualTime_ * 1.7f + phase) * 4.0f;
     crown.translation = {std::sin(visualTime_ * 1.3f + phase) * 1.6f, 0.0f};
     art.treePose->SetGroupTransform(art.treeGroups[2], crown);
-    DrawVectorArt(renderer, art.tree, WorldToScreen(origin, camera), {56.0f, 76.0f},
-                  art.treePose.get());
+    DrawVectorArt(renderer, art.tree, WorldToScreen(origin, camera),
+                  {56.0f, 76.0f}, art.treePose.get());
   };
   auto drawFlowerPatch = [&](Engine::Vector2 origin) {
     for (int y = 0; y < 3; ++y) {
@@ -919,11 +875,11 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
     Engine::VectorShapeTransform waves;
     waves.translation = {std::sin(visualTime_ * 2.7f) * 4.0f, 0.0f};
     art.waterPose->SetGroupTransform(art.waterGroups[1], waves);
-    DrawVectorArt(renderer, art.water,
-                  WorldToScreen({origin.x + size.x * 0.5f,
-                                 origin.y + size.y * 0.5f},
-                                camera),
-                  size, art.waterPose.get());
+    DrawVectorArt(
+        renderer, art.water,
+        WorldToScreen({origin.x + size.x * 0.5f, origin.y + size.y * 0.5f},
+                      camera),
+        size, art.waterPose.get());
   };
 
   for (int i = 0; i < 42; ++i) {
@@ -955,27 +911,20 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
   renderer.DrawText("TOWN", WorldToScreen({1994.0f, 734.0f}, camera), 14,
                     {48, 56, 36, 255});
 
-  const NpcData npcs[]{
-      {{1960.0f, 655.0f}, {190, 48, 80, 255}, "Salut! Bienvenue au village."},
-      {{1510.0f, 575.0f},
-       {80, 90, 160, 255},
-       "Les maisons bloquent le chemin."},
-      {{2360.0f, 790.0f}, {48, 98, 48, 255}, "Le lac est calme aujourd'hui."},
-      {{3140.0f, 775.0f}, {245, 205, 92, 255}, "Continue vers l'est!"},
-  };
-
   const NpcData *nearbyNpc = nullptr;
-  for (const NpcData &npc : npcs) {
+  for (const NpcData &npc : Npcs) {
     const Engine::Vector2 screen = WorldToScreen(npc.position, camera);
     if (screen.x >= -48.0f && screen.y >= -80.0f &&
         screen.x <= renderer.GetWidth() + 48.0f &&
         screen.y <= renderer.GetHeight() + 48.0f) {
       art.npcPose->Reset();
       Engine::VectorShapeTransform body;
-      body.translation = {0.0f, std::sin(visualTime_ * 2.4f + npc.position.x * 0.01f) * 1.5f};
+      body.translation = {
+          0.0f, std::sin(visualTime_ * 2.4f + npc.position.x * 0.01f) * 1.5f};
       art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Body), body);
       Engine::VectorShapeTransform head;
-      head.rotationDegrees = std::sin(visualTime_ * 1.8f + npc.position.y * 0.01f) * 5.0f;
+      head.rotationDegrees =
+          std::sin(visualTime_ * 1.8f + npc.position.y * 0.01f) * 5.0f;
       art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Head), head);
       art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Eyes), head);
       DrawVectorArt(renderer, art.npc, screen, {48.0f, 60.0f},
@@ -991,54 +940,175 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
                      nearbyNpc->dialog);
   }
 
+  if (const auto *knight = knightEntity_.Resolve()) {
+    const auto *visitor = knightVisitor_.Resolve();
+    if (visitor && visitor->IsActive()) {
+      DrawKnightSprite(renderer, WorldToScreen(knight->transform.position, camera),
+                       visitor->AttackFlash());
+    }
+  }
+
+  if (const auto *dragon = dragonEntity_.Resolve()) {
+    const auto *follower = dragonFollower_.Resolve();
+    if (follower && !follower->IsAlive()) {
+      const Engine::Vector2 smoke = WorldToScreen(dragon->transform.position, camera);
+      const float progress = follower->RespawnProgress();
+      renderer.DrawCircle({smoke.x - 8.0f, smoke.y + 2.0f},
+                          6.0f + progress * 8.0f,
+                          {105, 115, 128,
+                           static_cast<std::uint8_t>(140.0f * (1.0f - progress))});
+      renderer.DrawCircle({smoke.x + 7.0f, smoke.y - 5.0f},
+                          5.0f + progress * 7.0f,
+                          {160, 170, 180,
+                           static_cast<std::uint8_t>(120.0f * (1.0f - progress))});
+      if (progress > 0.72f) {
+        renderer.DrawCircle(smoke, 7.0f + std::sin(visualTime_ * 18.0f) * 2.0f,
+                            {116, 255, 150,
+                             static_cast<std::uint8_t>(255.0f * (progress - 0.72f) / 0.28f)});
+      }
+    } else {
+      const float fireIntensity = follower ? follower->FireIntensity() : 0.0f;
+      art.dragonPose->Reset();
+      const float wingBeat =
+          std::sin(visualTime_ * (fireIntensity > 0.0f ? 14.0f : 9.0f));
+      Engine::VectorShapeTransform wings;
+      wings.scale = {1.0f, 0.82f + 0.18f * (0.5f + 0.5f * wingBeat)};
+      wings.rotationDegrees = wingBeat * (7.0f + fireIntensity * 8.0f);
+      art.dragonPose->SetGroupTransform(DragonGroupId(art, DragonGroup::Wings),
+                                        wings);
+      Engine::VectorShapeTransform body;
+      body.translation = {-fireIntensity * 2.0f,
+                          std::sin(visualTime_ * 4.0f) * 2.2f};
+      art.dragonPose->SetGroupTransform(DragonGroupId(art, DragonGroup::Body),
+                                        body);
+      art.dragonPose->SetGroupTransform(DragonGroupId(art, DragonGroup::Head),
+                                        body);
+      Engine::VectorShapeTransform tail;
+      tail.rotationDegrees = std::sin(visualTime_ * 5.0f) * 10.0f -
+                             fireIntensity * 8.0f;
+      art.dragonPose->SetGroupTransform(DragonGroupId(art, DragonGroup::Tail),
+                                        tail);
+      Engine::VectorShapeTransform flame;
+      if (fireIntensity > 0.0f) {
+        flame.opacity = 1.0f;
+        flame.translation = {fireIntensity * 5.0f, 0.0f};
+        flame.scale = {1.2f + fireIntensity * 4.4f,
+                       0.9f + fireIntensity * 2.0f};
+      } else {
+        flame.opacity = 0.0f;
+        flame.scale = {0.15f, 0.15f};
+      }
+      art.dragonPose->SetGroupTransform(DragonGroupId(art, DragonGroup::Flame),
+                                        flame);
+
+      const Engine::Vector2 dragonScreen =
+          WorldToScreen(dragon->transform.position, camera);
+      if (fireIntensity > 0.0f) {
+        const Engine::Vector2 mouth{dragonScreen.x + 21.0f,
+                                    dragonScreen.y - 1.0f};
+        const float flicker = 0.5f + 0.5f * std::sin(visualTime_ * 38.0f);
+        const float length = 34.0f + fireIntensity * 42.0f + flicker * 8.0f;
+        const float spread = 10.0f + fireIntensity * 14.0f;
+        renderer.DrawLine(mouth, {mouth.x + length, mouth.y - spread * 0.55f},
+                          14.0f * fireIntensity,
+                          {255, 100, 32,
+                           static_cast<std::uint8_t>(185.0f * fireIntensity)});
+        renderer.DrawLine({mouth.x + 2.0f, mouth.y + 1.0f},
+                          {mouth.x + length * 0.92f, mouth.y + spread * 0.38f},
+                          18.0f * fireIntensity,
+                          {255, 135, 36,
+                           static_cast<std::uint8_t>(215.0f * fireIntensity)});
+        renderer.DrawLine({mouth.x + 8.0f, mouth.y},
+                          {mouth.x + length * 0.72f,
+                           mouth.y + std::sin(visualTime_ * 22.0f) * spread * 0.22f},
+                          8.0f * fireIntensity,
+                          {255, 235, 92,
+                           static_cast<std::uint8_t>(235.0f * fireIntensity)});
+        renderer.DrawCircle(
+            {mouth.x + length * 0.82f,
+             mouth.y + std::sin(visualTime_ * 17.0f) * spread * 0.28f},
+            5.0f + 5.0f * fireIntensity,
+            {255, 74, 42, static_cast<std::uint8_t>(165.0f * fireIntensity)});
+      }
+      DrawVectorArt(renderer, art.dragon, dragonScreen, {46.0f, 38.0f},
+                    art.dragonPose.get());
+    }
+  }
+
   if (player) {
     Engine::Vector2 facing{0.0f, 1.0f};
     if (const auto *movement =
             player->GetComponent<BaseGame::PlayerMovement>().Resolve())
       facing = movement->Facing();
     art.playerPose->Reset();
-    const float walk = std::sin((playerPosition.x + playerPosition.y) / 14.0f +
-                                visualTime_ * 8.0f);
-    Engine::VectorShapeTransform leftLeg;
-    leftLeg.translation = {walk * 2.5f, 0.0f};
-    leftLeg.rotationDegrees = walk * 9.0f;
-    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::LeftLeg),
-                                      leftLeg);
-    Engine::VectorShapeTransform rightLeg;
-    rightLeg.translation = {-walk * 2.5f, 0.0f};
-    rightLeg.rotationDegrees = -walk * 9.0f;
-    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::RightLeg),
-                                      rightLeg);
+    const float stepProgress =
+        playerWalking_
+            ? std::clamp((FootstepIntervalSeconds - footstepCooldown_) /
+                             FootstepIntervalSeconds,
+                         0.0f, 1.0f)
+            : 0.0f;
+    const float phase = stepProgress * 3.14159265f;
+    const float stride = stepProgress * 2.0f - 1.0f;
+    const float lift = playerWalking_ ? std::sin(phase) : 0.0f;
+    const bool leftIsSwinging = leftFootstep_;
+
+    auto configureLeg = [&](PlayerGroup legGroup, PlayerGroup footGroup,
+                            bool swinging, float side) {
+      Engine::VectorShapeTransform leg;
+      Engine::VectorShapeTransform foot;
+      if (playerWalking_) {
+        const float strideAmount = swinging ? stride : -stride * 0.38f;
+        const float liftAmount = swinging ? lift : 0.0f;
+        leg.translation = {strideAmount * 2.4f * side, -liftAmount * 2.1f};
+        leg.rotationDegrees = strideAmount * 10.0f * side;
+        foot.translation = {strideAmount * 3.1f * side,
+                            -liftAmount * 3.0f + (swinging ? 0.0f : 0.45f)};
+        foot.rotationDegrees = strideAmount * 7.0f * side;
+        foot.scale = {swinging ? 0.96f : 1.08f, swinging ? 0.92f : 1.04f};
+      }
+      art.playerPose->SetGroupTransform(PlayerGroupId(art, legGroup), leg);
+      art.playerPose->SetGroupTransform(PlayerGroupId(art, footGroup), foot);
+    };
+    configureLeg(PlayerGroup::LeftLeg, PlayerGroup::LeftFoot, leftIsSwinging,
+                 -1.0f);
+    configureLeg(PlayerGroup::RightLeg, PlayerGroup::RightFoot, !leftIsSwinging,
+                 1.0f);
+
+    const float bodyRise = playerWalking_ ? lift * 1.25f : 0.0f;
+    Engine::VectorShapeTransform body;
+    body.translation = {0.0f, -bodyRise};
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Body),
+                                      body);
     Engine::VectorShapeTransform head;
-    head.translation = {0.0f, std::sin(visualTime_ * 5.0f) * 1.2f};
+    head.translation = {0.0f,
+                        -bodyRise + (playerWalking_ ? lift * 0.45f : 0.0f)};
     art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Head),
                                       head);
     art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Hat),
                                       head);
     art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Eyes),
                                       head);
-    const float facingRotation = std::atan2(facing.y, facing.x) * 57.2957795f - 90.0f;
+    const float facingRotation =
+        std::atan2(facing.y, facing.x) * 57.2957795f - 90.0f;
     DrawVectorArt(renderer, art.player, WorldToScreen(playerPosition, camera),
                   {44.0f, 56.0f}, art.playerPose.get(), facingRotation * 0.03f);
   }
 
   std::size_t entityCount = 0;
   for (const ObjectID id : world_.Entities()) {
-    if (ObjectRef(id).Resolve())
+    const auto *entity = ObjectRef(id).Resolve();
+    if (entity && entity->GetTypeID() != BaseGame::ArenaDirectorEntityType)
       ++entityCount;
   }
 
-  DrawFilledRect(renderer, {14.0f, 14.0f}, {560.0f, 78.0f}, {5, 8, 22, 220});
-  renderer.DrawText("NEON SVG RPG - WASD / FLECHES POUR MARCHER",
-                    {24.0f, 24.0f}, 20, {235, 245, 210, 255});
-  renderer.DrawText(
-      "DA plus proche RPG 16-bit: herbe claire, eau ondulee, passerelles",
-      {24.0f, 48.0f}, 18, {125, 231, 255, 255});
-  renderer.DrawText("Entities: " + std::to_string(entityCount) + "   PNJ: 4",
-                    {24.0f, 70.0f}, 18, {245, 245, 210, 255});
-#if !defined(GAME_RELEASE_BUILD)
-  renderer.DrawFramesPerSecond(renderer.GetWidth() - 100, 20);
-#endif
+  DrawFilledRect(renderer, {14.0f, 14.0f}, {260.0f, 34.0f}, {5, 8, 22, 220});
+  renderer.DrawText("Entities: " + std::to_string(entityCount) +
+                        "   NPCs: " + std::to_string(Npcs.size()) +
+                        "   M: Settings",
+                    {24.0f, 22.0f}, 18, {245, 245, 210, 255});
+
+  if (settingsMenuOpen_)
+    DrawSettingsMenu(renderer, audioVolume_);
 }
 
 std::vector<std::byte> ProceduralGame::SaveResumeState() const {
@@ -1053,6 +1123,10 @@ void ProceduralGame::ResumeFromState(std::span<const std::byte> state) {
   playerMovement_ = {};
   playerWeapon_ = {};
   playerHealth_ = {};
+  dragonFollower_ = {};
+  dragonEntity_ = {};
+  knightVisitor_ = {};
+  knightEntity_ = {};
   arenaDirector_ = {};
   EnsureCoreEntities();
 }

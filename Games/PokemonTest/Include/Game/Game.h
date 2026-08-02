@@ -8,7 +8,8 @@
 
 #include <memory>
 
-struct ArtResources;
+struct AudioResources;
+struct VectorArtResources;
 
 class ProceduralGame final : public Engine::GameInterface {
 public:
@@ -39,11 +40,25 @@ private:
   Engine::GameInstance gameInstance_;
   GameInput inputBindings_;
   Engine::Gameplay::World &world_;
-  std::unique_ptr<ArtResources> art_;
+  std::unique_ptr<VectorArtResources> art_;
+  std::unique_ptr<AudioResources> audio_;
   float visualTime_ = 0.0f;
   Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> playerEntity_;
   Engine::Gameplay::ObjectRef<BaseGame::PlayerMovement> playerMovement_;
   Engine::Gameplay::ObjectRef<BaseGame::PlayerWeapon> playerWeapon_;
   Engine::Gameplay::ObjectRef<BaseGame::Health> playerHealth_;
+  Engine::Gameplay::ObjectRef<BaseGame::DragonFollower> dragonFollower_;
+  Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> dragonEntity_;
+  Engine::Gameplay::ObjectRef<BaseGame::KnightVisitor> knightVisitor_;
+  Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> knightEntity_;
   Engine::Gameplay::ObjectRef<BaseGame::ArenaDirector> arenaDirector_;
+  float footstepCooldown_ = 0.0f;
+  int activeNpcIndex_ = -1;
+  bool leftFootstep_ = false;
+  bool playerWalking_ = false;
+  bool settingsMenuOpen_ = false;
+  bool mKeyWasDown_ = false;
+  bool volumeUpKeyWasDown_ = false;
+  bool volumeDownKeyWasDown_ = false;
+  float audioVolume_ = 1.0f;
 };

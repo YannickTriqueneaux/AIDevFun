@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Engine/AI/OpenAIPricing.h"
+#include "AssistantHost/OpenAIPricing.h"
 
 #include <string>
 
-namespace Engine {
+namespace AssistantHost {
 struct OpenAISettings {
   std::string apiKey;
   std::string model = "gpt-5.5";
@@ -14,4 +14,4 @@ struct OpenAISettings {
     return !apiKey.empty() && !model.empty();
   }
 };
-} // namespace Engine
+} // namespace AssistantHost

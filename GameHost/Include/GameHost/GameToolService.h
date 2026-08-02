@@ -18,10 +18,18 @@ public:
 
   [[nodiscard]] bool IsLaunchRequested() const;
 
+#if defined(ENGINE_AUTOTESTS)
+  [[nodiscard]] std::string HandleRequestForAutoTest(std::string_view request) {
+    return HandleRequest(request);
+  }
+#endif
+
 private:
   [[nodiscard]] std::string HandleRequest(std::string_view request);
   [[nodiscard]] std::filesystem::path
   ResolveGameFile(std::string_view relativePath) const;
+  [[nodiscard]] std::filesystem::path
+  ResolveNewGameFile(std::string_view relativePath) const;
   [[nodiscard]] std::filesystem::path
   ResolveEngineFile(std::string_view relativePath) const;
   [[nodiscard]] std::filesystem::path

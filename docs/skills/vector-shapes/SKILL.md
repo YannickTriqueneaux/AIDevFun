@@ -10,6 +10,16 @@ Use `Engine::VectorShape` from
 source format; never introduce HTML, CSS, scripts, data URLs, or external asset
 dependencies.
 
+## Organize Game vector art
+
+Keep SVG strings, group enums and name tables, loading, poses, and transient
+vector resources in dedicated vector-art `.h/.cpp` files whenever practical.
+Do not bury large SVG definitions in `Game.cpp`, entity implementations, or
+unrelated gameplay Components. Let the main Game code own or call a focused
+resource container such as `VectorArtResources`; keep orchestration there, not
+the SVG data. Split further by visual family when one vector-art file becomes
+unwieldy.
+
 ## Author the resource
 
 Embed SVG as a C++ raw string with a `viewBox`. Give every independently
@@ -31,8 +41,9 @@ static constexpr std::array<std::string_view,
     PlayerGroupNames{"body", "weapon"};
 ```
 
-Keep the enum and name table adjacent to the SVG. The strings are authoring
-metadata used once to bind the SVG; frame code uses compact group IDs.
+Keep the enum and name table adjacent to the SVG in the dedicated vector-art
+source. The strings are authoring metadata used once to bind the SVG; frame
+code uses compact group IDs.
 
 Use only the deterministic subset:
 

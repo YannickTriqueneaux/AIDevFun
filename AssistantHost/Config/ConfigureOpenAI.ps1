@@ -16,6 +16,14 @@ $defaultPricing = @{
     longContextOutputMultiplier = 1.5
 }
 $settings = $null
+$launcherSettings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+if ($launcherSettings.assistant.providerLibrary -ne "AssistantProviderOpenAI.dll") {
+    exit 0
+}
+$repositoryRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path (Split-Path -Parent $SettingsPath) "..\.."))
+$SettingsPath = Join-Path $repositoryRoot `
+    "AssistantProviders\OpenAI\OpenAIProvider.settings.json"
 
 function Save-OpenAISettings {
     param(
@@ -27,11 +35,9 @@ function Save-OpenAISettings {
     $parentDirectory = Split-Path -Parent $SettingsPath
     New-Item -ItemType Directory -Path $parentDirectory -Force | Out-Null
     @{
-        openai = @{
-            apiKey = $ApiKey
-            model = $Model
-            pricing = $Pricing
-        }
+        apiKey = $ApiKey
+        model = $Model
+        pricing = $Pricing
     } |
         ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath $SettingsPath -Encoding UTF8
@@ -41,16 +47,16 @@ if (Test-Path -LiteralPath $SettingsPath) {
     try {
         $settings = Get-Content -LiteralPath $SettingsPath -Raw |
             ConvertFrom-Json
-        $configuredKey = [string] $settings.openai.apiKey
+        $configuredKey = [string] $settings.apiKey
         if (
             -not [string]::IsNullOrWhiteSpace($configuredKey) -and
             $configuredKey -ne "your-api-key"
         ) {
-            $configuredModel = [string] $settings.openai.model
+            $configuredModel = [string] $settings.model
             if ([string]::IsNullOrWhiteSpace($configuredModel)) {
                 $configuredModel = $defaultModel
             }
-            $configuredPricing = $settings.openai.pricing
+            $configuredPricing = $settings.pricing
             if ($null -eq $configuredPricing) {
                 $configuredPricing = $defaultPricing
             }
@@ -102,9 +108,9 @@ if ([string]::IsNullOrWhiteSpace($apiKey)) {
 $model = $defaultModel
 if (
     $null -ne $settings -and
-    -not [string]::IsNullOrWhiteSpace([string] $settings.openai.model)
+    -not [string]::IsNullOrWhiteSpace([string] $settings.model)
 ) {
-    $model = [string] $settings.openai.model
+    $model = [string] $settings.model
 }
 
 Save-OpenAISettings `
@@ -112,4 +118,4 @@ Save-OpenAISettings `
     -Model $model `
     -Pricing $defaultPricing
 
-Write-Host "OpenAI settings saved to AssistantHost/Config/settings.json."
+Write-Host "OpenAI provider settings saved."

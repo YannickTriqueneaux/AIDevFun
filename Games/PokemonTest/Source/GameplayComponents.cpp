@@ -183,6 +183,177 @@ void PlayerWeapon::LoadState(StateReader &reader, std::uint32_t version) {
   shotPending_ = reader.Value<bool>();
 }
 
+DragonFollower::DragonFollower(ObjectRef<Engine::Gameplay::Entity> owner)
+    : Component(owner) {}
+
+float DragonFollower::FireIntensity() const {
+  if (!alive_ || breathTime_ <= 0.0f)
+    return 0.0f;
+  constexpr float BreathDuration = 0.85f;
+  const float progress =
+      std::clamp(1.0f - breathTime_ / BreathDuration, 0.0f, 1.0f);
+  return std::sin(progress * 3.14159265f);
+}
+
+float DragonFollower::RespawnProgress() const {
+  if (alive_)
+    return 1.0f;
+  return std::clamp(1.0f - respawnTimer_ / 3.0f, 0.0f, 1.0f);
+}
+
+void DragonFollower::Kill() {
+  if (!alive_)
+    return;
+  alive_ = false;
+  respawnTimer_ = 3.0f;
+  breathTime_ = 0.0f;
+  breathCooldown_ = 1.25f;
+}
+
+void DragonFollower::Update(float deltaTime) {
+  if (!alive_) {
+    respawnTimer_ = std::max(0.0f, respawnTimer_ - deltaTime);
+    if (respawnTimer_ <= 0.0f)
+      alive_ = true;
+    else
+      return;
+  }
+
+  breathCooldown_ -= deltaTime;
+  if (breathTime_ > 0.0f) {
+    breathTime_ = std::max(0.0f, breathTime_ - deltaTime);
+  } else if (breathCooldown_ <= 0.0f) {
+    breathTime_ = 0.85f;
+    breathCooldown_ = 3.4f;
+  }
+
+  auto *entity = GetOwner().Resolve();
+  const auto *target = target_.Resolve();
+  if (!entity || !target)
+    return;
+
+  const Engine::Vector2 desired{target->transform.position.x - followDistance_,
+                                target->transform.position.y - 34.0f};
+  const Engine::Vector2 toDesired{
+      desired.x - entity->transform.position.x,
+      desired.y - entity->transform.position.y};
+  const float distanceSquared =
+      toDesired.x * toDesired.x + toDesired.y * toDesired.y;
+  if (distanceSquared <= 0.25f)
+    return;
+  if (distanceSquared > 280.0f * 280.0f) {
+    entity->transform.position = desired;
+    return;
+  }
+  const float distance = std::sqrt(distanceSquared);
+  const float step = std::min(distance, movementSpeed_ * deltaTime);
+  entity->transform.position += toDesired * (step / distance);
+}
+
+void DragonFollower::SaveState(StateWriter &writer) const {
+  writer.Value(target_.GetID());
+  writer.Value(movementSpeed_);
+  writer.Value(followDistance_);
+  writer.Value(breathCooldown_);
+  writer.Value(breathTime_);
+  writer.Value(respawnTimer_);
+  writer.Value(alive_);
+}
+
+void DragonFollower::LoadState(StateReader &reader, std::uint32_t version) {
+  if (version < 1 || version > 3)
+    throw std::runtime_error("Unsupported DragonFollower state version.");
+  target_ = ObjectRef<Engine::Gameplay::Entity>(
+      reader.Value<Engine::Gameplay::ObjectID>());
+  movementSpeed_ = reader.Value<float>();
+  followDistance_ = reader.Value<float>();
+  if (version >= 2) {
+    breathCooldown_ = reader.Value<float>();
+    breathTime_ = reader.Value<float>();
+  } else {
+    breathCooldown_ = 1.25f;
+    breathTime_ = 0.0f;
+  }
+  if (version >= 3) {
+    respawnTimer_ = reader.Value<float>();
+    alive_ = reader.Value<bool>();
+  } else {
+    respawnTimer_ = 0.0f;
+    alive_ = true;
+  }
+}
+
+KnightVisitor::KnightVisitor(ObjectRef<Engine::Gameplay::Entity> owner)
+    : Component(owner) {}
+
+bool KnightVisitor::ConsumeDragonAttack() {
+  if (!attackPending_)
+    return false;
+  attackPending_ = false;
+  return true;
+}
+
+void KnightVisitor::Update(float deltaTime) {
+  attackFlash_ = std::max(0.0f, attackFlash_ - deltaTime);
+  auto *entity = GetOwner().Resolve();
+  auto *target = target_.Resolve();
+  if (!entity || !target)
+    return;
+
+  const auto dragonFollower = target->GetComponent<DragonFollower>();
+  const auto *dragon = dragonFollower.Resolve();
+  const bool dragonAlive = dragon && dragon->IsAlive();
+
+  if (!active_) {
+    spawnCooldown_ = std::max(0.0f, spawnCooldown_ - deltaTime);
+    if (spawnCooldown_ > 0.0f || !dragonAlive)
+      return;
+    active_ = true;
+    attackPending_ = false;
+    entity->transform.position = {target->transform.position.x - 360.0f,
+                                  target->transform.position.y + 24.0f};
+  }
+
+  entity->transform.position.x += movementSpeed_ * deltaTime;
+  const float desiredY = target->transform.position.y + 24.0f;
+  entity->transform.position.y +=
+      (desiredY - entity->transform.position.y) * std::min(1.0f, deltaTime * 4.0f);
+
+  const Engine::Vector2 delta{target->transform.position.x - entity->transform.position.x,
+                              target->transform.position.y - entity->transform.position.y};
+  if (dragonAlive && !attackPending_ && attackFlash_ <= 0.0f &&
+      std::abs(delta.x) <= 30.0f && std::abs(delta.y) <= 44.0f) {
+    attackPending_ = true;
+    attackFlash_ = 0.42f;
+  }
+
+  if (entity->transform.position.x > target->transform.position.x + 430.0f) {
+    active_ = false;
+    attackPending_ = false;
+    spawnCooldown_ = 7.5f;
+  }
+}
+
+void KnightVisitor::SaveState(StateWriter &writer) const {
+  writer.Value(target_.GetID());
+  writer.Value(spawnCooldown_);
+  writer.Value(attackFlash_);
+  writer.Value(movementSpeed_);
+  writer.Value(active_);
+  writer.Value(attackPending_);
+}
+
+void KnightVisitor::LoadState(StateReader &reader, std::uint32_t version) {
+  RequireVersion(version, "KnightVisitor");
+  target_ = ObjectRef<Engine::Gameplay::Entity>(
+      reader.Value<Engine::Gameplay::ObjectID>());
+  spawnCooldown_ = reader.Value<float>();
+  attackFlash_ = reader.Value<float>();
+  movementSpeed_ = reader.Value<float>();
+  active_ = reader.Value<bool>();
+  attackPending_ = reader.Value<bool>();
+}
+
 EnemyMovement::EnemyMovement(ObjectRef<Engine::Gameplay::Entity> owner)
     : Component(owner) {}
 

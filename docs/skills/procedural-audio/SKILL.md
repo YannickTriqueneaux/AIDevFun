@@ -5,9 +5,18 @@ description: Create or modify AI-authored synthesized game sound effects, instru
 
 # Procedural audio
 
-Use `Engine/Audio/ProceduralAudio.h`. Author patches and scores beside the Game
-code as static arrays and definitions. Do not generate WAV files, allocate
+Use `Engine/Audio/ProceduralAudio.h`. Do not generate WAV files, allocate
 samples in gameplay, or synthesize during `Update`.
+
+## Organize Game audio
+
+Keep patches, envelopes, note arrays, scores, and transient playback resources
+in dedicated audio `.h/.cpp` files whenever practical. Do not bury large sound
+or music definitions in `Game.cpp`, entity implementations, or unrelated
+gameplay Components. Let the main Game code own or call a focused resource
+container such as `AudioResources`; keep event orchestration there, not the
+audio data. Split sound effects and music into additional dedicated files when
+one audio source becomes unwieldy.
 
 ## Create a sound
 
@@ -91,6 +100,20 @@ Call `Build`, `Upload`, and `Play(true)` during initialization. Call
 `music.Update()` every frame while uploaded; streaming stalls without it. Use
 `Pause`, `Resume`, `Stop`, `Seek`, `SetVolume`, `SetPitch`, and `SetPan` for
 runtime control.
+
+## Use an attached MIDI reference
+
+The assistant prompt may include a locally decoded Standard MIDI File
+reference. Its text block contains PPQ timing, tempo changes, track names, and
+notes in `startBeat,durationBeat,note,velocity,channel` form. Treat it as
+musical reference material for rhythm, contour, harmony, instrumentation, and
+structure, then author native `ProceduralMusicNote` arrays and patches in the
+Game's dedicated audio sources. Do not add a runtime MIDI dependency or copy
+the decoded text into Game assets.
+
+Keep the generated score compact and adapted to the game loop. Preserve the
+musical characteristics requested by the user while making reasonable changes
+for the available procedural instruments and loop length.
 
 ## Preserve resume
 

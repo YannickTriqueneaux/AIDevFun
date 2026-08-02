@@ -22,6 +22,10 @@ inline constexpr TypeID PlayerProjectileEntityType =
     Engine::Gameplay::StableTypeID("BaseGame.PlayerProjectileEntity.v2");
 inline constexpr TypeID EnemyProjectileEntityType =
     Engine::Gameplay::StableTypeID("BaseGame.EnemyProjectileEntity.v2");
+inline constexpr TypeID DragonEntityType =
+    Engine::Gameplay::StableTypeID("BaseGame.DragonEntity.v1");
+inline constexpr TypeID KnightEntityType =
+    Engine::Gameplay::StableTypeID("BaseGame.KnightEntity.v1");
 
 enum class Faction : std::uint8_t { Player, Enemy };
 
@@ -86,6 +90,58 @@ private:
   float cooldown_ = 0.0f;
   bool trigger_ = false;
   bool shotPending_ = false;
+};
+
+class DragonFollower final : public Engine::Gameplay::Component {
+public:
+  static constexpr TypeID Type =
+      Engine::Gameplay::StableTypeID("BaseGame.DragonFollower.v1");
+  explicit DragonFollower(ObjectRef<Engine::Gameplay::Entity> owner);
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 3; }
+  [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
+  void SetTarget(ObjectRef<Engine::Gameplay::Entity> target) { target_ = target; }
+  [[nodiscard]] bool IsAlive() const { return alive_; }
+  [[nodiscard]] float FireIntensity() const;
+  [[nodiscard]] float RespawnProgress() const;
+  void Kill();
+  void Update(float deltaTime) override;
+  void SaveState(StateWriter &writer) const override;
+  void LoadState(StateReader &reader, std::uint32_t version) override;
+
+private:
+  ObjectRef<Engine::Gameplay::Entity> target_;
+  float movementSpeed_ = 230.0f;
+  float followDistance_ = 58.0f;
+  float breathCooldown_ = 1.25f;
+  float breathTime_ = 0.0f;
+  float respawnTimer_ = 0.0f;
+  bool alive_ = true;
+};
+
+class KnightVisitor final : public Engine::Gameplay::Component {
+public:
+  static constexpr TypeID Type =
+      Engine::Gameplay::StableTypeID("BaseGame.KnightVisitor.v1");
+  explicit KnightVisitor(ObjectRef<Engine::Gameplay::Entity> owner);
+  [[nodiscard]] TypeID GetTypeID() const override { return Type; }
+  [[nodiscard]] std::uint32_t CurrentStateVersion() const override { return 1; }
+  [[nodiscard]] std::uint32_t MinimumStateVersion() const override { return 1; }
+  void SetTarget(ObjectRef<Engine::Gameplay::Entity> target) { target_ = target; }
+  [[nodiscard]] bool IsActive() const { return active_; }
+  [[nodiscard]] float AttackFlash() const { return attackFlash_; }
+  [[nodiscard]] bool ConsumeDragonAttack();
+  void Update(float deltaTime) override;
+  void SaveState(StateWriter &writer) const override;
+  void LoadState(StateReader &reader, std::uint32_t version) override;
+
+private:
+  ObjectRef<Engine::Gameplay::Entity> target_;
+  float spawnCooldown_ = 4.0f;
+  float attackFlash_ = 0.0f;
+  float movementSpeed_ = 280.0f;
+  bool active_ = false;
+  bool attackPending_ = false;
 };
 
 class EnemyMovement final : public Engine::Gameplay::Component {

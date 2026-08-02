@@ -1,4 +1,4 @@
-#include "Engine/UI/PromptProcessor.h"
+#include "AssistantHost/PromptProcessor.h"
 
 #include "Engine/Core/Logger.h"
 
@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-namespace Engine {
+namespace AssistantHost {
 namespace {
 constexpr std::string_view GameDeveloperInstructions =
     "You are the embedded AI developer for a lightweight C++20 game. "
@@ -34,6 +34,10 @@ constexpr std::string_view GameDeveloperInstructions =
     "with "
     "apply_game_patches. Prefer one batch over many single-file calls. "
     "Review a complete patch batch for syntax errors before submitting it. "
+    "Use create_game_code_file only for genuinely new .cpp or .h files and "
+    "delete_game_code_file only when an existing Game code file is obsolete. "
+    "After creating or deleting code, inspect related files and build before "
+    "requesting reload. "
     "Do not attempt to modify Engine, Launcher, GameHost, or AssistantHost. "
     "Respond in English with a concise summary of changes and validation.";
 
@@ -48,51 +52,61 @@ std::string TruncateForLog(std::string_view text) {
 }
 } // namespace
 
-PromptProcessor::PromptProcessor(OpenAISettings settings)
-    : client_(std::move(settings)) {}
+PromptProcessor::PromptProcessor(Development::AssistantProvider &provider)
+    : provider_(provider) {}
 
-bool PromptProcessor::IsConfigured() const { return client_.IsConfigured(); }
+bool PromptProcessor::IsConfigured() const { return provider_.IsConfigured(); }
 
 const std::string &PromptProcessor::GetModel() const {
-  return client_.GetModel();
+  return provider_.GetModel();
+}
+
+const std::string &PromptProcessor::GetProviderName() const {
+  return provider_.GetDisplayName();
 }
 
 PromptProcessResult
 PromptProcessor::Process(std::string_view prompt,
-                         const std::vector<OpenAIImageInput> &images,
-                         const OpenAIStreamCallback &onEvent) {
+                         const std::vector<AssistantImageInput> &images,
+                         const AssistantStreamCallback &onEvent) {
   PromptProcessResult processResult;
-  const auto accountForResponse = [this, &processResult](
-                                      const OpenAIResponse &response) {
-    const bool firstReportedUsage = !processResult.usageReported;
-    processResult.usage += response.usage;
-    const OpenAICostEstimate estimate = client_.EstimateCost(response.usage);
-    processResult.costAvailable =
-        firstReportedUsage ? estimate.available
-                           : processResult.costAvailable && estimate.available;
-    processResult.estimatedCostUsd += estimate.usd;
-    processResult.usageReported = true;
-  };
+  const auto accountForResponse =
+      [this, &processResult](const Development::AssistantResponse &response) {
+        const bool firstReportedUsage = !processResult.usageReported;
+        processResult.usage += response.usage;
+        const Development::AssistantCostEstimate estimate =
+            provider_.EstimateCost(response.usage);
+        processResult.costAvailable =
+            firstReportedUsage
+                ? estimate.available
+                : processResult.costAvailable && estimate.available;
+        processResult.estimatedCostUsd += estimate.usd;
+        processResult.usageReported = true;
+      };
 
   try {
-    Logger::Info("Starting OpenAI response. Previous response ID present: " +
-                 std::string(previousResponseId_.empty() ? "no." : "yes."));
-    OpenAIResponse response =
-        client_.CreateResponse(GameDeveloperInstructions, prompt, images,
-                               previousResponseId_, onEvent);
+    Engine::Logger::Info(
+        "Starting assistant response. Previous response ID present: " +
+        std::string(previousResponseId_.empty() ? "no." : "yes."));
+    Development::AssistantResponse response =
+        provider_.CreateResponse(GameDeveloperInstructions, prompt, images,
+                                 previousResponseId_, onEvent);
     accountForResponse(response);
 
     for (int round = 0;
          !response.toolCalls.empty() && round < MaximumToolRounds; ++round) {
-      Logger::Info("OpenAI tool round " + std::to_string(round + 1) + " with " +
-                   std::to_string(response.toolCalls.size()) + " call(s).");
-      std::vector<OpenAIToolOutput> outputs;
+      Engine::Logger::Info(
+          "Assistant tool round " + std::to_string(round + 1) + " with " +
+          std::to_string(response.toolCalls.size()) + " call(s).");
+      std::vector<Development::AssistantToolOutput> outputs;
       outputs.reserve(response.toolCalls.size());
 
-      for (const OpenAIResponse::ToolCall &call : response.toolCalls) {
-        Logger::Info("Tool call " + call.name + " arguments:\n" +
-                     TruncateForLog(call.arguments));
-        onEvent({OpenAIStreamEventType::Status, "Running tool: " + call.name});
+      for (const Development::AssistantResponse::ToolCall &call :
+           response.toolCalls) {
+        Engine::Logger::Info("Tool call " + call.name + " arguments:\n" +
+                             TruncateForLog(call.arguments));
+        onEvent(
+            {AssistantStreamEventType::Status, "Running tool: " + call.name});
 
         std::string output;
         try {
@@ -102,44 +116,46 @@ PromptProcessor::Process(std::string_view prompt,
                    exception.what() + R"("})";
         }
 
-        Logger::Info("Tool result " + call.name + ":\n" +
-                     TruncateForLog(output));
+        Engine::Logger::Info("Tool result " + call.name + ":\n" +
+                             TruncateForLog(output));
         outputs.push_back({.callId = call.callId, .output = std::move(output)});
         onEvent(
-            {OpenAIStreamEventType::Status, "Tool completed: " + call.name});
+            {AssistantStreamEventType::Status, "Tool completed: " + call.name});
       }
 
       const bool finalToolRound = round + 1 >= MaximumToolRounds;
       if (finalToolRound) {
-        Logger::Warning(
+        Engine::Logger::Warning(
             "Tool round budget reached; requesting a final response "
             "with tools disabled.");
-        onEvent({OpenAIStreamEventType::Status,
+        onEvent({AssistantStreamEventType::Status,
                  "Tool budget reached. Producing final response."});
       }
 
-      response = client_.ContinueWithToolOutputs(GameDeveloperInstructions,
-                                                 outputs, response.id, onEvent,
-                                                 !finalToolRound);
+      response = provider_.ContinueWithToolOutputs(GameDeveloperInstructions,
+                                                   outputs, response.id,
+                                                   onEvent, !finalToolRound);
       accountForResponse(response);
     }
 
     if (!response.toolCalls.empty()) {
-      Logger::Error(
+      Engine::Logger::Error(
           "Model returned tool calls even after tools were disabled.");
       throw std::runtime_error(
           "Model returned unexpected tool calls after finalization.");
     }
 
     previousResponseId_ = response.id;
-    Logger::Info("OpenAI response completed. Response ID: " + response.id);
+    Engine::Logger::Info("Assistant response completed. Response ID: " +
+                         response.id);
     return processResult;
   } catch (const std::exception &exception) {
-    Logger::Error(std::string("OpenAI request failed: ") + exception.what());
+    Engine::Logger::Error(std::string("Assistant request failed: ") +
+                          exception.what());
     processResult.messages.push_back(
         {PromptMessageRole::Information,
          std::string("Request failed: ") + exception.what()});
     return processResult;
   }
 }
-} // namespace Engine
+} // namespace AssistantHost

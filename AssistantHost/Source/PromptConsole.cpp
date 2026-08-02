@@ -1,4 +1,4 @@
-#include "Engine/UI/PromptConsole.h"
+#include "AssistantHost/PromptConsole.h"
 
 #include "Engine/UI/UiSystem.h"
 
@@ -26,6 +26,7 @@ constexpr Engine::Color UserColor{110, 190, 255, 255};
 constexpr Engine::Color ResultColor{235, 235, 235, 255};
 constexpr Engine::Color InformationColor{145, 150, 165, 255};
 constexpr std::size_t MaximumPromptImages = 4;
+constexpr std::size_t MaximumPromptFileAttachments = 2;
 constexpr int MaximumImageDimension = 2048;
 
 std::string EncodeBase64(const unsigned char *data, std::size_t size) {
@@ -56,7 +57,7 @@ std::string FormatTokens(std::uint64_t tokens) {
 }
 
 std::string FormatCost(std::string_view label,
-                       const Engine::OpenAITokenUsage &usage,
+                       const AssistantHost::AssistantTokenUsage &usage,
                        bool costAvailable, double costUsd) {
   std::ostringstream stream;
   stream << label << ": ";
@@ -69,18 +70,25 @@ std::string FormatCost(std::string_view label,
   stream << " (" << FormatTokens(usage.TotalTokens()) << " tokens)";
   return stream.str();
 }
+
 } // namespace
 
-namespace Engine {
-PromptConsole::PromptConsole(OpenAISettings settings,
-                             PromptConsoleOptions options)
-    : processor_(std::move(settings)), options_(options),
+namespace AssistantHost {
+using Engine::Color;
+using Engine::UiCondition;
+using Engine::UiSystem;
+PromptConsole::PromptConsole(Development::AssistantProvider &provider,
+                             PromptConsoleOptions options,
+                             PromptAttachmentProvider *attachmentProvider)
+    : processor_(provider), options_(options),
+      attachmentProvider_(attachmentProvider),
       expanded_(options.expandedByDefault) {
   messages_.push_back(
       {PromptMessageRole::Information,
        processor_.IsConfigured()
-           ? "OpenAI ready with model " + processor_.GetModel() + "."
-           : "OpenAI is not configured. Add apiKey to settings.json."});
+           ? processor_.GetProviderName() + " ready with model " +
+                 processor_.GetModel() + "."
+           : processor_.GetProviderName() + " is not configured."});
 }
 
 void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
@@ -144,11 +152,10 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
     ui.Text("Conversation", {210, 215, 225, 255});
     ui.Separator();
 
+    const std::size_t attachmentRows =
+        promptImages_.size() + promptFileAttachments_.size();
     const float attachmentHeight =
-        promptImages_.empty()
-            ? 0.0f
-            : ui.GetInputHeight() *
-                  static_cast<float>(promptImages_.size() * 2);
+        ui.GetInputHeight() * static_cast<float>(attachmentRows * 2);
     const float inputAreaHeight =
         ui.GetInputHeight() * 2.0f + attachmentHeight + 12.0f;
     if (ui.BeginChild("PromptHistory", {0.0f, -inputAreaHeight}, false)) {
@@ -186,11 +193,12 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
       focusInput_ = false;
     }
 
-    if (ui.Button("Paste image", {110.0f, 0.0f})) {
-      PasteClipboardImage();
+    if (ui.Button("Paste image/MIDI", {145.0f, 0.0f})) {
+      if (!PasteClipboardFile())
+        PasteClipboardImage();
     }
     for (std::size_t index = 0; index < promptImages_.size();) {
-      const OpenAIImageInput &image = promptImages_[index];
+      const AssistantImageInput &image = promptImages_[index];
       ui.Text("Image " + std::to_string(index + 1) + " - " +
                   std::to_string(image.width) + "x" +
                   std::to_string(image.height),
@@ -204,18 +212,55 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
         ++index;
       }
     }
+    for (std::size_t index = 0; index < promptFileAttachments_.size();) {
+      ui.Text(promptFileAttachments_[index].displayName, InformationColor);
+      const std::string removeLabel =
+          "Remove file " + std::to_string(index + 1) + "##PromptFile";
+      if (ui.Button(removeLabel, {130.0f, 0.0f})) {
+        promptFileAttachments_.erase(promptFileAttachments_.begin() +
+                                     static_cast<std::ptrdiff_t>(index));
+      } else {
+        ++index;
+      }
+    }
 
     const bool submitted = ui.InputText(
-        "##PromptInput", "Type a prompt, paste an image, and press Enter...",
+        "##PromptInput",
+        "Type a prompt, paste an image or MIDI file, and press Enter...",
         promptInput_);
     if (ui.IsPasteShortcutPressed()) {
-      PasteClipboardImage();
+      if (!PasteClipboardFile())
+        PasteClipboardImage();
     }
     if (submitted) {
       SubmitPrompt();
     }
   }
   ui.EndPanel();
+}
+
+bool PromptConsole::PasteClipboardFile() {
+  if (attachmentProvider_ == nullptr)
+    return false;
+  if (pendingRequest_.valid()) {
+    activityLogs_.push_back(
+        "Wait for the current response before attaching a file.");
+    return true;
+  }
+  const PromptAttachmentResult result =
+      attachmentProvider_->PasteClipboardFile();
+  if (!result.handled)
+    return false;
+  if (promptFileAttachments_.size() >= MaximumPromptFileAttachments) {
+    activityLogs_.push_back("A prompt can contain at most two files.");
+    return true;
+  }
+  if (result.attachment)
+    promptFileAttachments_.push_back(*result.attachment);
+  if (!result.message.empty())
+    activityLogs_.push_back(result.message);
+  scrollToLatest_ = true;
+  return true;
 }
 
 void PromptConsole::PollAutomaticPrompt() {
@@ -245,7 +290,8 @@ void PromptConsole::PollAutomaticPrompt() {
     return;
   }
 
-  Logger::Warning("Starting automatic AI crash recovery investigation.");
+  Engine::Logger::Warning(
+      "Starting automatic AI crash recovery investigation.");
   promptInput_ = std::move(prompt);
   SubmitPrompt();
 }
@@ -313,23 +359,34 @@ void PromptConsole::SubmitPrompt() {
   }
 
   const auto firstContent = promptInput_.find_first_not_of(" \t\r\n");
-  if (firstContent == std::string::npos && promptImages_.empty()) {
+  if (firstContent == std::string::npos && promptImages_.empty() &&
+      promptFileAttachments_.empty()) {
     return;
   }
 
-  std::string prompt = "Use the attached image as a visual reference.";
+  std::string prompt = promptFileAttachments_.empty()
+                           ? "Use the attached image as a visual reference."
+                           : "Use the attached MIDI as a musical reference.";
   if (firstContent != std::string::npos) {
     const auto lastContent = promptInput_.find_last_not_of(" \t\r\n");
     prompt = promptInput_.substr(firstContent, lastContent - firstContent + 1);
   }
   auto images = std::move(promptImages_);
+  auto fileAttachments = std::move(promptFileAttachments_);
+  for (const PromptTextAttachment &attachment : fileAttachments)
+    prompt += attachment.promptText;
 
-  Logger::Info("User prompt submitted:\n" +
-               prompt.substr(0, std::min<std::size_t>(prompt.size(), 4'000)));
+  Engine::Logger::Info(
+      "User prompt submitted:\n" +
+      prompt.substr(0, std::min<std::size_t>(prompt.size(), 4'000)));
   const std::string attachmentSummary =
-      images.empty()
-          ? ""
-          : "\n[" + std::to_string(images.size()) + " image(s) attached]";
+      (images.empty()
+           ? ""
+           : "\n[" + std::to_string(images.size()) + " image(s) attached]") +
+      (fileAttachments.empty()
+           ? ""
+           : "\n[" + std::to_string(fileAttachments.size()) +
+                 " file reference(s) attached]");
   messages_.push_back({PromptMessageRole::User, prompt + attachmentSummary});
   activityLogs_.push_back("Request queued.");
   activeResponseIndex_.reset();
@@ -339,7 +396,7 @@ void PromptConsole::SubmitPrompt() {
       std::async(std::launch::async, [this, prompt = std::move(prompt),
                                       images = std::move(images)]() {
         return processor_.Process(prompt, images,
-                                  [this](const OpenAIStreamEvent &event) {
+                                  [this](const AssistantStreamEvent &event) {
                                     std::scoped_lock lock(streamEventsMutex_);
                                     pendingStreamEvents_.push_back(event);
                                   });
@@ -347,6 +404,7 @@ void PromptConsole::SubmitPrompt() {
 
   promptInput_.clear();
   promptImages_.clear();
+  promptFileAttachments_.clear();
   scrollToLatest_ = true;
   focusInput_ = true;
 }
@@ -370,29 +428,30 @@ void PromptConsole::PollPendingRequest() {
                    std::make_move_iterator(result.messages.begin()),
                    std::make_move_iterator(result.messages.end()));
   scrollToLatest_ = true;
-  Logger::Info(FormatCost("Completed prompt estimated cost", lastPromptUsage_,
-                          lastPromptCostAvailable_, lastPromptCostUsd_) +
-               "; " +
-               FormatCost("session", sessionUsage_, sessionCostAvailable_,
-                          sessionCostUsd_));
-  Logger::Info("Pending OpenAI request joined by the UI thread.");
+  Engine::Logger::Info(FormatCost("Completed prompt estimated cost",
+                                  lastPromptUsage_, lastPromptCostAvailable_,
+                                  lastPromptCostUsd_) +
+                       "; " +
+                       FormatCost("session", sessionUsage_,
+                                  sessionCostAvailable_, sessionCostUsd_));
+  Engine::Logger::Info("Pending assistant request joined by the UI thread.");
 }
 
 void PromptConsole::PollStreamEvents() {
-  std::vector<OpenAIStreamEvent> events;
+  std::vector<AssistantStreamEvent> events;
   {
     std::scoped_lock lock(streamEventsMutex_);
     events.swap(pendingStreamEvents_);
   }
 
-  for (const OpenAIStreamEvent &event : events) {
+  for (const AssistantStreamEvent &event : events) {
     switch (event.type) {
-    case OpenAIStreamEventType::Status:
+    case AssistantStreamEventType::Status:
       activityLogs_.push_back(event.text);
-      Logger::Info("OpenAI status: " + event.text);
+      Engine::Logger::Info("Assistant status: " + event.text);
       break;
 
-    case OpenAIStreamEventType::ReasoningSummaryDelta:
+    case AssistantStreamEventType::ReasoningSummaryDelta:
       if (!activeReasoningLogIndex_) {
         activityLogs_.push_back("Reasoning summary: ");
         activeReasoningLogIndex_ = activityLogs_.size() - 1;
@@ -400,7 +459,7 @@ void PromptConsole::PollStreamEvents() {
       activityLogs_[*activeReasoningLogIndex_] += event.text;
       break;
 
-    case OpenAIStreamEventType::OutputTextDelta:
+    case AssistantStreamEventType::OutputTextDelta:
       if (!activeResponseIndex_) {
         messages_.push_back({PromptMessageRole::Result, ""});
         activeResponseIndex_ = messages_.size() - 1;
@@ -414,4 +473,4 @@ void PromptConsole::PollStreamEvents() {
     scrollToLatest_ = true;
   }
 }
-} // namespace Engine
+} // namespace AssistantHost

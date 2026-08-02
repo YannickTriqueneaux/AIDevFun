@@ -7,10 +7,6 @@
 #include <thread>
 #include <utility>
 
-#ifndef MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
-#define MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT "UnknownGame"
-#endif
-
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -88,11 +84,6 @@ std::string ReadMessage(HANDLE pipe) {
 } // namespace
 
 namespace Engine {
-std::string_view GetGameToolsPipeName() {
-  return R"(\\.\pipe\MakeYourOwnGame.AI.)" MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT
-         R"(.GameTools.v1)";
-}
-
 struct NamedPipeServer::Impl {
   std::string pipeName;
   RequestHandler handler;
@@ -164,14 +155,14 @@ std::string NamedPipeClient::Request(std::string_view pipeName,
 #if defined(_WIN32)
   const std::wstring wideName = ToWide(pipeName);
   if (!WaitNamedPipeW(wideName.c_str(), timeoutMilliseconds)) {
-    throw std::runtime_error("Game tools IPC is unavailable.");
+    throw std::runtime_error("Named-pipe IPC is unavailable.");
   }
 
   const HANDLE pipe =
       CreateFileW(wideName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                   OPEN_EXISTING, 0, nullptr);
   if (pipe == INVALID_HANDLE_VALUE) {
-    throw std::runtime_error("Failed to connect to Game tools IPC.");
+    throw std::runtime_error("Failed to connect to named-pipe IPC.");
   }
 
   try {

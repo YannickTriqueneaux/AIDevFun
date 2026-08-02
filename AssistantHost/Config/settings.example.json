@@ -1,15 +1,6 @@
-{
-  "openai": {
-    "apiKey": "",
-    "model": "gpt-5.5",
-    "pricing": {
-      "model": "gpt-5.5",
-      "inputUsdPerMillion": 5.0,
-      "cachedInputUsdPerMillion": 0.5,
-      "outputUsdPerMillion": 30.0,
-      "longContextThreshold": 272000,
-      "longContextInputMultiplier": 2.0,
-      "longContextOutputMultiplier": 1.5
-    }
-  }
+﻿{
+    "assistant":  {
+                      "providerLibrary":  "AssistantProviderOpenAI.dll",
+                      "providerSettings":  "OpenAIProvider.settings.json"
+                  }
 }

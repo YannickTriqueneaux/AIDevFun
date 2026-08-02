@@ -11,6 +11,9 @@ prepared for distribution.
 The assistant can create animated vector visuals, procedural sound effects, and
 music as part of the same rapid iteration and hot-reload workflow.
 
+MIDI files can be pasted as musical references for AI-authored procedural
+music.
+
 Images can also be pasted directly into the assistant's prompt and used as
 visual references while developing a game.
 
@@ -65,7 +68,7 @@ Requirements:
 - CMake 3.24 or newer
 - a C++20 compiler
 - Git
-- an OpenAI API key
+- either a ChatGPT subscription signed in through Codex CLI, or an OpenAI API key
 
 Run:
 
@@ -75,9 +78,9 @@ Start.bat
 
 `Start.bat`:
 
-1. checks the OpenAI configuration;
-2. opens [the OpenAI API key page](https://platform.openai.com/api-keys) and
-   securely asks for a key when none is configured;
+1. checks the selected assistant provider configuration;
+2. requests an API key only when the OpenAI API provider is selected and none
+   is configured;
 3. lists the projects under `Games/` and offers to create a new one;
 4. asks which game to open, or asks for a name and copies `BaseGame`;
 5. configures and builds that game in its private build directory; and
@@ -296,10 +299,13 @@ Engine ✕ Game
 ```
 
 This boundary keeps the runtime stable while game code changes frequently.
+GameHost, AssistantHost, and Launcher also depend on Engine, never the other
+way around. AssistantHost owns prompts and loads the selected assistant
+provider from a separate DLL.
 
 ## Configuration
 
-The local OpenAI configuration is stored in:
+The assistant provider is selected in:
 
 ```text
 AssistantHost/Config/settings.json
@@ -309,25 +315,23 @@ Example:
 
 ```json
 {
-  "openai": {
-    "apiKey": "your-api-key",
-    "model": "gpt-5.5",
-    "pricing": {
-      "model": "gpt-5.5",
-      "inputUsdPerMillion": 5.0,
-      "cachedInputUsdPerMillion": 0.5,
-      "outputUsdPerMillion": 30.0,
-      "longContextThreshold": 272000,
-      "longContextInputMultiplier": 2.0,
-      "longContextOutputMultiplier": 1.5
-    }
+  "assistant": {
+    "providerLibrary": "AssistantProviderCodex.dll",
+    "providerSettings": "CodexProvider.settings.json"
   }
 }
 ```
 
-The file is ignored by Git and copied into a game's build only when
-`AssistantHost` is built. Building only `Game.dll` does not touch it. API keys
-and HTTP authorization headers are never written to application logs.
+`AssistantProviderCodex.dll` uses the signed-in Codex CLI and ChatGPT account.
+`AssistantProviderOpenAI.dll` uses an API key. Each provider owns its separate
+settings file, and other providers can be integrated without adding their
+dependencies to AssistantHost or Engine.
+
+Provider configuration and extension details are documented in
+[AI providers](docs/AIProviders.md).
+
+Local settings containing credentials are ignored by Git. API keys and HTTP
+authorization headers are never written to application logs.
 
 The Responses API reports real input, cached-input, and output token usage, but
 OpenAI does not currently expose an official pricing API. Token prices are

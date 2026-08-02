@@ -97,34 +97,28 @@ target_link_libraries(EngineImGui PUBLIC raylib)
 add_library(Engine SHARED
     Engine/Source/Application.cpp
     Engine/Source/ProceduralAudio.cpp
-    Engine/Source/AssistantApplication.cpp
     Engine/Source/CrashDiagnostics.cpp
+    Engine/Source/DesktopWindow.cpp
     Engine/Source/DynamicLibrary.cpp
     Engine/Source/GameInstance.cpp
-    Engine/Source/GameToolClient.cpp
     Engine/Source/InputSystem.cpp
     Engine/Source/Logger.cpp
     Engine/Source/Memory.cpp
     Engine/Source/NamedPipe.cpp
-    Engine/Source/OpenAIClient.cpp
-    Engine/Source/OpenAIPricing.cpp
     Engine/Source/ObjectManager.cpp
     Engine/Source/ObjectMemory.cpp
-    Engine/Source/PromptConsole.cpp
-    Engine/Source/PromptProcessor.cpp
     Engine/Source/RenderContext.cpp
     Engine/Source/Renderer2D.cpp
     Engine/Source/VectorShape.cpp
     Engine/Source/Renderer3D.cpp
     Engine/Source/ShaderProgram.cpp
-    Engine/Source/Settings.cpp
     Engine/Source/World.cpp
     Engine/Source/UiSystem.cpp
     Engine/Source/WindowFocus.cpp
 )
 
 target_include_directories(Engine PUBLIC Engine/Include)
-target_link_libraries(Engine PRIVATE raylib EngineImGui nlohmann_json::nlohmann_json ${CMAKE_DL_LIBS})
+target_link_libraries(Engine PRIVATE raylib EngineImGui ${CMAKE_DL_LIBS})
 if(ENGINE_PROFILE_ENABLED)
     target_link_libraries(Engine PUBLIC Tracy::TracyClient)
     target_compile_definitions(Engine PUBLIC ENGINE_PROFILE_ENABLED)
@@ -136,7 +130,6 @@ if(ENGINE_PROFILE_ENABLED)
             $<TARGET_FILE_DIR:Engine>)
 endif()
 if(WIN32)
-    target_link_libraries(Engine PRIVATE winhttp)
     target_link_libraries(
         Engine PRIVATE
         "$<$<NOT:$<CONFIG:Release>>:dbghelp>")
@@ -147,16 +140,16 @@ endif()
 target_compile_definitions(Engine PRIVATE ENGINE_BUILD)
 target_compile_definitions(
     Engine PUBLIC "$<$<NOT:$<CONFIG:Release>>:ENGINE_AUTOTESTS>")
-target_compile_definitions(
-    Engine PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
-file(GLOB ACTIVE_GAME_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE ACTIVE_GAME_SOURCES CONFIGURE_DEPENDS
     "${ACTIVE_GAME_DIR}/Source/*.cpp")
+file(GLOB_RECURSE ACTIVE_GAME_HEADERS CONFIGURE_DEPENDS
+    "${ACTIVE_GAME_DIR}/Include/*.h")
 set(ACTIVE_GAME_RUNTIME_SOURCES ${ACTIVE_GAME_SOURCES})
 list(REMOVE_ITEM ACTIVE_GAME_RUNTIME_SOURCES
     "${ACTIVE_GAME_DIR}/Source/GameModule.cpp")
 
-add_library(Game SHARED ${ACTIVE_GAME_SOURCES})
+add_library(Game SHARED ${ACTIVE_GAME_SOURCES} ${ACTIVE_GAME_HEADERS})
 
 target_include_directories(Game PRIVATE ${ACTIVE_GAME_DIR}/Include)
 target_link_libraries(Game PRIVATE Engine)
@@ -167,23 +160,66 @@ add_executable(GameHost
     GameHost/Source/GameToolService.cpp
     GameHost/Source/ReloadableGame.cpp
 )
-target_include_directories(GameHost PRIVATE GameHost/Include)
+target_include_directories(
+    GameHost PRIVATE GameHost/Include Development/Include)
 target_link_libraries(GameHost PRIVATE Engine nlohmann_json::nlohmann_json)
 target_compile_definitions(
     GameHost PRIVATE MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR="${ACTIVE_GAME_DIR}")
 target_compile_definitions(
     GameHost PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
-add_executable(AssistantHost AssistantHost/Source/main.cpp)
-target_link_libraries(AssistantHost PRIVATE Engine)
+add_executable(AssistantHost
+    AssistantHost/Source/AssistantApplication.cpp
+    AssistantHost/Source/AssistantProviderLoader.cpp
+    AssistantHost/Source/GameToolClient.cpp
+    AssistantHost/Source/main.cpp
+    AssistantHost/Source/MidiAttachmentProvider.cpp
+    AssistantHost/Source/PromptConsole.cpp
+    AssistantHost/Source/PromptProcessor.cpp
+    AssistantHost/Source/Settings.cpp
+)
+target_include_directories(
+    AssistantHost PRIVATE AssistantHost/Include Development/Include)
+target_link_libraries(
+    AssistantHost PRIVATE Engine raylib nlohmann_json::nlohmann_json)
+if(WIN32)
+    target_link_libraries(AssistantHost PRIVATE shell32 winhttp)
+endif()
 target_compile_definitions(
     AssistantHost PRIVATE MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
+target_compile_definitions(
+    AssistantHost PRIVATE MAKE_YOUR_OWN_GAME_AI_ACTIVE_GAME_DIR="${ACTIVE_GAME_DIR}")
+
+add_library(AssistantProviderOpenAI SHARED
+    AssistantProviders/OpenAI/Source/OpenAIProvider.cpp
+    AssistantHost/Source/OpenAIClient.cpp
+    AssistantHost/Source/OpenAIPricing.cpp)
+target_include_directories(AssistantProviderOpenAI PRIVATE
+    AssistantHost/Include Development/Include)
+target_link_libraries(AssistantProviderOpenAI PRIVATE
+    nlohmann_json::nlohmann_json)
+if(WIN32)
+    target_link_libraries(AssistantProviderOpenAI PRIVATE winhttp)
+endif()
+
+add_library(AssistantProviderCodex SHARED
+    AssistantProviders/Codex/Source/CodexProvider.cpp)
+target_include_directories(AssistantProviderCodex PRIVATE Development/Include)
+target_link_libraries(AssistantProviderCodex PRIVATE nlohmann_json::nlohmann_json)
+
+add_dependencies(AssistantHost AssistantProviderOpenAI AssistantProviderCodex)
 add_custom_command(
     TARGET AssistantHost
     POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/AssistantHost/Config/settings.json
         $<TARGET_FILE_DIR:AssistantHost>/settings.json
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/AssistantProviders/OpenAI/OpenAIProvider.settings.json
+        $<TARGET_FILE_DIR:AssistantHost>/OpenAIProvider.settings.json
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/AssistantProviders/Codex/CodexProvider.settings.json
+        $<TARGET_FILE_DIR:AssistantHost>/CodexProvider.settings.json
 )
 
 add_executable(Launcher Launcher/Source/main.cpp)
@@ -260,6 +296,17 @@ if(BUILD_TESTING)
     )
     target_link_libraries(EngineTests PRIVATE Engine)
 
+    add_executable(AssistantHostTests EXCLUDE_FROM_ALL
+        Tests/AssistantHostTests.cpp
+        AssistantHost/Source/MidiAttachmentProvider.cpp
+    )
+    target_include_directories(
+        AssistantHostTests PRIVATE AssistantHost/Include Development/Include)
+    target_link_libraries(AssistantHostTests PRIVATE Engine)
+    if(WIN32)
+        target_link_libraries(AssistantHostTests PRIVATE shell32)
+    endif()
+
     add_executable(HotReloadTests EXCLUDE_FROM_ALL
         Tests/HotReloadTests.cpp
         GameHost/Source/ReloadableGame.cpp
@@ -268,7 +315,18 @@ if(BUILD_TESTING)
     target_link_libraries(HotReloadTests PRIVATE Engine)
     add_dependencies(HotReloadTests BaseGameTestModule)
 
-    foreach(target EngineTests HotReloadTests BaseGameTestModule)
+    add_executable(GameToolServiceTests EXCLUDE_FROM_ALL
+        Tests/GameToolServiceTests.cpp
+        GameHost/Source/GameToolService.cpp
+        GameHost/Source/ReloadableGame.cpp
+    )
+    target_include_directories(
+        GameToolServiceTests PRIVATE GameHost/Include Development/Include)
+    target_link_libraries(
+        GameToolServiceTests PRIVATE Engine nlohmann_json::nlohmann_json)
+
+    foreach(target EngineTests AssistantHostTests HotReloadTests
+                   GameToolServiceTests BaseGameTestModule)
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4 /permissive-)
         else()
@@ -276,8 +334,15 @@ if(BUILD_TESTING)
         endif()
     endforeach()
 
-    add_custom_target(AutoTests DEPENDS EngineTests HotReloadTests)
+    add_custom_target(
+        AutoTests DEPENDS EngineTests AssistantHostTests HotReloadTests
+                          GameToolServiceTests)
     add_test(NAME Engine.Pure COMMAND EngineTests)
+    add_test(NAME AssistantHost.Midi COMMAND AssistantHostTests)
+    add_test(
+        NAME GameTools.CodeFiles
+        COMMAND GameToolServiceTests
+            $<TARGET_FILE_DIR:GameToolServiceTests>/GameCodeFileToolSandbox)
     add_test(
         NAME Game.HeadlessHotReload
         COMMAND HotReloadTests
