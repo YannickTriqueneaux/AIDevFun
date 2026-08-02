@@ -73,7 +73,9 @@ entity; it owns immutable GPU meshes grouped by SVG `id`.
 Create one `VectorShapePose` for each independently posed draw instance. Use
 `VectorShapeAnimation` for reusable keyframe clips. Sampling interpolates
 translation, shortest-path rotation, scale, and opacity and resets untracked
-groups to identity.
+groups to identity. Rotation and scale use the center of the group's
+tessellated bounds as their pivot; author geometry around the intended part,
+not around the SVG document origin.
 
 ```cpp
 Engine::VectorShapePose pose(playerShape);

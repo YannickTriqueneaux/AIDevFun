@@ -47,10 +47,12 @@ Affine Rotation(float degrees) {
   return {cosine, sine, -sine, cosine, 0, 0};
 }
 
-Affine ToAffine(const Engine::VectorShapeTransform &transform) {
+Affine ToAffine(const Engine::VectorShapeTransform &transform,
+                Engine::Vector2 pivot) {
   return Translation(transform.translation.x, transform.translation.y) *
-         Rotation(transform.rotationDegrees) *
-         Scale(transform.scale.x, transform.scale.y);
+         Translation(pivot.x, pivot.y) * Rotation(transform.rotationDegrees) *
+         Scale(transform.scale.x, transform.scale.y) *
+         Translation(-pivot.x, -pivot.y);
 }
 
 Matrix ToMatrix(const Affine &m) {
@@ -75,6 +77,7 @@ struct Group {
   std::string id;
   std::size_t parent = NoParent;
   Affine transform;
+  Engine::Vector2 pivot{};
   std::vector<Vertex> triangles;
   Mesh mesh{};
   bool uploaded = false;
@@ -296,6 +299,10 @@ float Cross(Engine::Vector2 a, Engine::Vector2 b, Engine::Vector2 c) {
 void AddTriangle(Group &group, Engine::Vector2 a, Engine::Vector2 b,
                  Engine::Vector2 c, Engine::Color color,
                  const Affine &transform) {
+  // Raylib's 2D projection flips Y before OpenGL back-face culling. Keep mesh
+  // triangles clockwise in SVG space so they remain front-facing on screen.
+  if (Cross(a, b, c) > 0.0f)
+    std::swap(b, c);
   group.triangles.push_back({Apply(transform, a), color});
   group.triangles.push_back({Apply(transform, b), color});
   group.triangles.push_back({Apply(transform, c), color});
@@ -684,6 +691,21 @@ bool VectorShape::LoadFromSvg(std::string_view source) {
     implementation_->resource.reset();
     return false;
   }
+  for (Group &group : resource->groups) {
+    if (group.triangles.empty())
+      continue;
+    float minimumX = group.triangles.front().position.x;
+    float maximumX = minimumX;
+    float minimumY = group.triangles.front().position.y;
+    float maximumY = minimumY;
+    for (const Vertex &vertex : group.triangles) {
+      minimumX = std::min(minimumX, vertex.position.x);
+      maximumX = std::max(maximumX, vertex.position.x);
+      minimumY = std::min(minimumY, vertex.position.y);
+      maximumY = std::max(maximumY, vertex.position.y);
+    }
+    group.pivot = {(minimumX + maximumX) * 0.5f, (minimumY + maximumY) * 0.5f};
+  }
   implementation_->resource = std::move(resource);
   return true;
 }
@@ -789,7 +811,8 @@ void VectorShape::Draw(const VectorShapeDrawParameters &parameters) const {
     float opacity = 1;
     if (parameters.pose && parameters.pose->implementation_ &&
         parameters.pose->implementation_->resource.get() == &resource) {
-      local = local * ToAffine(parameters.pose->implementation_->transforms[i]);
+      local = local * ToAffine(parameters.pose->implementation_->transforms[i],
+                               group.pivot);
       opacity = std::clamp(
           parameters.pose->implementation_->transforms[i].opacity, 0.0f, 1.0f);
     }

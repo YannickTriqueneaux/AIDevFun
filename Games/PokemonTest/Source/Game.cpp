@@ -4,6 +4,7 @@
 
 #include "Engine/Core/Profile.h"
 #include "Engine/Graphics/RenderContext.h"
+#include "Engine/Graphics/VectorShape.h"
 #include "Engine/Input/InputSystem.h"
 #include "Engine/Serialization/Serializer.h"
 
@@ -21,7 +22,10 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +41,221 @@ constexpr float EnemyRadius = 17.0f;
 constexpr float ProjectileRadius = 4.0f;
 constexpr std::size_t MaximumEnemies = 288;
 constexpr int PlayerMaxHealth = 20;
+constexpr Engine::Color White{255, 255, 255, 255};
+
+static constexpr std::string_view GroundSvg = R"svg(
+<svg viewBox="0 0 100 100">
+  <g id="base"><rect x="0" y="0" width="100" height="100" fill="#173E31"/></g>
+  <g id="moss"><circle cx="18" cy="22" r="3" fill="#2DD36F" opacity="0.26"/><circle cx="76" cy="64" r="3" fill="#7EE787" opacity="0.22"/><circle cx="42" cy="82" r="2" fill="#B7F7A6" opacity="0.18"/><circle cx="88" cy="18" r="2" fill="#39FFB6" opacity="0.16"/></g>
+  <g id="veins"><line x1="14" y1="68" x2="22" y2="62" stroke="#2DD36F" stroke-width="1" opacity="0.18"/><line x1="58" y1="28" x2="66" y2="22" stroke="#7EE787" stroke-width="1" opacity="0.16"/><line x1="31" y1="43" x2="39" y2="39" stroke="#B7F7A6" stroke-width="1" opacity="0.12"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 3> GroundGroups{"base", "moss", "veins"};
+
+static constexpr std::string_view RoadSvg = R"svg(
+<svg viewBox="0 0 100 24">
+  <g id="pavement"><rect x="0" y="0" width="100" height="24" fill="#2F3040"/><rect x="0" y="4" width="100" height="16" fill="#3B3D4F" opacity="0.82"/></g>
+  <g id="glow"><line x1="0" y1="4" x2="100" y2="4" stroke="#C9D1D9" stroke-width="2" opacity="0.35"/><line x1="0" y1="20" x2="100" y2="20" stroke="#C9D1D9" stroke-width="2" opacity="0.35"/></g>
+  <g id="dash"><line x1="12" y1="12" x2="28" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.75"/><line x1="44" y1="12" x2="56" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.70"/><line x1="72" y1="12" x2="88" y2="12" stroke="#F6D365" stroke-width="2" opacity="0.75"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 3> RoadGroups{"pavement", "glow", "dash"};
+
+static constexpr std::string_view HouseSvg = R"svg(
+<svg viewBox="0 0 120 120">
+  <g id="shadow"><ellipse cx="60" cy="108" rx="50" ry="9" fill="#050816" opacity="0.35"/></g>
+  <g id="body"><rect x="14" y="44" width="92" height="64" fill="#F8F1C9"/><rect x="20" y="50" width="80" height="52" fill="#DDBB86" opacity="0.35"/></g>
+  <g id="roof"><polygon points="8,48 60,10 112,48" fill="#FF4FD8"/><rect x="20" y="36" width="80" height="18" fill="#8A5CFF"/></g>
+  <g id="windows"><rect x="27" y="60" width="19" height="18" fill="#00E5FF"/><rect x="74" y="60" width="19" height="18" fill="#00E5FF"/><line x1="36" y1="60" x2="36" y2="78" stroke="#F8F871" stroke-width="2"/><line x1="83" y1="60" x2="83" y2="78" stroke="#F8F871" stroke-width="2"/></g>
+  <g id="door"><rect x="51" y="74" width="20" height="34" fill="#51344D"/><circle cx="66" cy="91" r="2" fill="#F8F871"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 5> HouseGroups{"shadow", "body", "roof", "windows", "door"};
+
+static constexpr std::string_view SignSvg = R"svg(
+<svg viewBox="0 0 80 60">
+  <g id="post"><rect x="37" y="24" width="6" height="34" fill="#51344D"/></g>
+  <g id="board"><rect x="6" y="4" width="68" height="28" fill="#F8F1C9"/><line x1="6" y1="4" x2="74" y2="4" stroke="#00E5FF" stroke-width="3"/><line x1="6" y1="32" x2="74" y2="32" stroke="#FF4FD8" stroke-width="3"/></g>
+  <g id="spark"><circle cx="67" cy="8" r="3" fill="#F8F871"/><circle cx="13" cy="28" r="2" fill="#F8F871"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 3> SignGroups{"post", "board", "spark"};
+
+static constexpr std::string_view FlowerSvg = R"svg(
+<svg viewBox="0 0 32 40">
+  <g id="stem"><line x1="16" y1="18" x2="16" y2="38" stroke="#2DD36F" stroke-width="3"/><ellipse cx="10" cy="29" rx="6" ry="3" fill="#39FFB6"/><ellipse cx="22" cy="32" rx="6" ry="3" fill="#39FFB6"/></g>
+  <g id="petals"><circle cx="16" cy="10" r="5" fill="#F8F871"/><circle cx="8" cy="14" r="5" fill="#FF4FD8"/><circle cx="24" cy="14" r="5" fill="#8A5CFF"/><circle cx="16" cy="20" r="5" fill="#00E5FF"/></g>
+  <g id="heart"><circle cx="16" cy="15" r="4" fill="#F8F1C9"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 3> FlowerGroups{"stem", "petals", "heart"};
+
+static constexpr std::string_view WaterSvg = R"svg(
+<svg viewBox="0 0 100 60">
+  <g id="pool"><rect x="0" y="0" width="100" height="60" fill="#123B73"/><rect x="4" y="4" width="92" height="52" fill="#00A8FF" opacity="0.52"/></g>
+  <g id="waves"><line x1="8" y1="16" x2="92" y2="16" stroke="#B7F7FF" stroke-width="2" opacity="0.75"/><line x1="14" y1="31" x2="86" y2="31" stroke="#B7F7FF" stroke-width="2" opacity="0.55"/><line x1="8" y1="46" x2="92" y2="46" stroke="#B7F7FF" stroke-width="2" opacity="0.68"/></g>
+  <g id="shine"><circle cx="76" cy="12" r="3" fill="#F8F871" opacity="0.85"/><circle cx="34" cy="42" r="2" fill="#F8F871" opacity="0.65"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 3> WaterGroups{"pool", "waves", "shine"};
+
+static constexpr std::string_view TreeSvg = R"svg(
+<svg viewBox="0 0 56 76">
+  <g id="shadow"><ellipse cx="28" cy="70" rx="18" ry="5" fill="#050816" opacity="0.28"/></g>
+  <g id="trunk"><rect x="24" y="38" width="9" height="29" fill="#6B3E3B"/></g>
+  <g id="crown"><circle cx="28" cy="24" r="21" fill="#2DD36F"/><circle cx="16" cy="34" r="15" fill="#39FFB6"/><circle cx="40" cy="34" r="15" fill="#00C781"/></g>
+  <g id="fruit"><circle cx="20" cy="24" r="3" fill="#FF4FD8"/><circle cx="38" cy="19" r="3" fill="#F8F871"/><circle cx="31" cy="40" r="3" fill="#8A5CFF"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 4> TreeGroups{"shadow", "trunk", "crown", "fruit"};
+
+static constexpr std::string_view PlayerSvg = R"svg(
+<svg viewBox="0 0 64 80">
+  <g id="shadow"><ellipse cx="32" cy="72" rx="20" ry="6" fill="#050816" opacity="0.38"/></g>
+  <g id="left_leg"><rect x="21" y="49" width="8" height="17" fill="#172554"/></g>
+  <g id="right_leg"><rect x="35" y="49" width="8" height="17" fill="#172554"/></g>
+  <g id="body"><polygon points="18,28 46,28 51,52 13,52" fill="#00E5FF"/><line x1="18" y1="31" x2="46" y2="31" stroke="#F8F871" stroke-width="2" opacity="0.75"/></g>
+  <g id="head"><circle cx="32" cy="20" r="12" fill="#FFD6A5"/></g>
+  <g id="hat"><polygon points="16,16 48,16 40,4 24,4" fill="#FF4FD8"/><rect x="14" y="15" width="36" height="5" fill="#8A5CFF"/></g>
+  <g id="eyes"><circle cx="27" cy="20" r="2" fill="#050816"/><circle cx="37" cy="20" r="2" fill="#050816"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 7> PlayerGroups{"shadow", "left_leg", "right_leg", "body", "head", "hat", "eyes"};
+
+enum class PlayerGroup : std::size_t { Shadow, LeftLeg, RightLeg, Body, Head, Hat, Eyes, Count };
+
+static constexpr std::string_view NpcSvg = R"svg(
+<svg viewBox="0 0 64 80">
+  <g id="shadow"><ellipse cx="32" cy="72" rx="18" ry="5" fill="#050816" opacity="0.32"/></g>
+  <g id="legs"><rect x="22" y="50" width="8" height="16" fill="#51344D"/><rect x="34" y="50" width="8" height="16" fill="#51344D"/></g>
+  <g id="body"><rect x="18" y="30" width="28" height="24" fill="#8A5CFF"/><line x1="20" y1="35" x2="44" y2="35" stroke="#00E5FF" stroke-width="2" opacity="0.8"/></g>
+  <g id="head"><circle cx="32" cy="21" r="12" fill="#FFD6A5"/></g>
+  <g id="hair"><polygon points="20,17 26,8 44,13 43,20 32,14" fill="#51344D"/></g>
+  <g id="eyes"><circle cx="27" cy="21" r="2" fill="#050816"/><circle cx="37" cy="21" r="2" fill="#050816"/></g>
+</svg>
+)svg";
+static constexpr std::array<std::string_view, 6> NpcGroups{"shadow", "legs", "body", "head", "hair", "eyes"};
+
+enum class NpcGroup : std::size_t { Shadow, Legs, Body, Head, Hair, Eyes, Count };
+
+template <std::size_t Count>
+std::array<Engine::VectorShapeGroupID, Count>
+LoadShape(Engine::VectorShape &shape, std::string_view svg,
+          const std::array<std::string_view, Count> &groups) {
+  if (!shape.LoadFromSvg(svg) || !shape.Upload())
+    throw std::runtime_error(shape.GetLastError());
+  auto ids = shape.ResolveGroups(groups);
+  for (std::size_t index = 0; index < ids.size(); ++index) {
+    if (!ids[index].IsValid())
+      throw std::runtime_error("Missing SVG group: " + std::string(groups[index]));
+  }
+  return ids;
+}
+
+} // namespace
+
+struct ArtResources {
+  Engine::VectorShape ground;
+  Engine::VectorShape road;
+  Engine::VectorShape house;
+  Engine::VectorShape sign;
+  Engine::VectorShape flower;
+  Engine::VectorShape water;
+  Engine::VectorShape tree;
+  Engine::VectorShape player;
+  Engine::VectorShape npc;
+
+  std::array<Engine::VectorShapeGroupID, GroundGroups.size()> groundGroups{};
+  std::array<Engine::VectorShapeGroupID, RoadGroups.size()> roadGroups{};
+  std::array<Engine::VectorShapeGroupID, HouseGroups.size()> houseGroups{};
+  std::array<Engine::VectorShapeGroupID, SignGroups.size()> signGroups{};
+  std::array<Engine::VectorShapeGroupID, FlowerGroups.size()> flowerGroups{};
+  std::array<Engine::VectorShapeGroupID, WaterGroups.size()> waterGroups{};
+  std::array<Engine::VectorShapeGroupID, TreeGroups.size()> treeGroups{};
+  std::array<Engine::VectorShapeGroupID, PlayerGroups.size()> playerGroups{};
+  std::array<Engine::VectorShapeGroupID, NpcGroups.size()> npcGroups{};
+
+  std::unique_ptr<Engine::VectorShapePose> roadPose;
+  std::unique_ptr<Engine::VectorShapePose> housePose;
+  std::unique_ptr<Engine::VectorShapePose> signPose;
+  std::unique_ptr<Engine::VectorShapePose> flowerPose;
+  std::unique_ptr<Engine::VectorShapePose> waterPose;
+  std::unique_ptr<Engine::VectorShapePose> treePose;
+  std::unique_ptr<Engine::VectorShapePose> playerPose;
+  std::unique_ptr<Engine::VectorShapePose> npcPose;
+  bool ready = false;
+
+  void Initialize() {
+    Shutdown();
+    groundGroups = LoadShape(ground, GroundSvg, GroundGroups);
+    roadGroups = LoadShape(road, RoadSvg, RoadGroups);
+    houseGroups = LoadShape(house, HouseSvg, HouseGroups);
+    signGroups = LoadShape(sign, SignSvg, SignGroups);
+    flowerGroups = LoadShape(flower, FlowerSvg, FlowerGroups);
+    waterGroups = LoadShape(water, WaterSvg, WaterGroups);
+    treeGroups = LoadShape(tree, TreeSvg, TreeGroups);
+    playerGroups = LoadShape(player, PlayerSvg, PlayerGroups);
+    npcGroups = LoadShape(npc, NpcSvg, NpcGroups);
+    roadPose = std::make_unique<Engine::VectorShapePose>(road);
+    housePose = std::make_unique<Engine::VectorShapePose>(house);
+    signPose = std::make_unique<Engine::VectorShapePose>(sign);
+    flowerPose = std::make_unique<Engine::VectorShapePose>(flower);
+    waterPose = std::make_unique<Engine::VectorShapePose>(water);
+    treePose = std::make_unique<Engine::VectorShapePose>(tree);
+    playerPose = std::make_unique<Engine::VectorShapePose>(player);
+    npcPose = std::make_unique<Engine::VectorShapePose>(npc);
+    ready = true;
+  }
+
+  void Shutdown() {
+    ready = false;
+    npcPose.reset();
+    playerPose.reset();
+    treePose.reset();
+    waterPose.reset();
+    flowerPose.reset();
+    signPose.reset();
+    housePose.reset();
+    roadPose.reset();
+    npc.Unload();
+    player.Unload();
+    tree.Unload();
+    water.Unload();
+    flower.Unload();
+    sign.Unload();
+    house.Unload();
+    road.Unload();
+    ground.Unload();
+  }
+};
+
+namespace {
+void DrawVectorArt(Engine::Renderer2D &renderer, const Engine::VectorShape &shape,
+                   Engine::Vector2 center, Engine::Vector2 size,
+                   const Engine::VectorShapePose *pose = nullptr,
+                   float rotationDegrees = 0.0f,
+                   Engine::Color tint = White) {
+  if (center.x < -size.x || center.y < -size.y ||
+      center.x > static_cast<float>(renderer.GetWidth()) + size.x ||
+      center.y > static_cast<float>(renderer.GetHeight()) + size.y)
+    return;
+  Engine::VectorShapeDrawParameters draw;
+  draw.position = center;
+  draw.size = size;
+  draw.rotationDegrees = rotationDegrees;
+  draw.tint = tint;
+  draw.pose = pose;
+  renderer.DrawVectorShape(shape, draw);
+}
+
+Engine::VectorShapeGroupID PlayerGroupId(const ArtResources &art,
+                                         PlayerGroup group) {
+  return art.playerGroups[static_cast<std::size_t>(group)];
+}
+
+Engine::VectorShapeGroupID NpcGroupId(const ArtResources &art, NpcGroup group) {
+  return art.npcGroups[static_cast<std::size_t>(group)];
+}
 
 float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
   const float x = left.x - right.x;
@@ -352,9 +571,22 @@ void DrawHealthBar(Engine::Renderer2D &renderer, Engine::Vector2 center,
 }
 } // namespace
 
-ProceduralGame::ProceduralGame() : world_(*gameInstance_.GetWorld()) {
+ProceduralGame::ProceduralGame()
+    : world_(*gameInstance_.GetWorld()), art_(std::make_unique<ArtResources>()) {
   RegisterGameplayTypes();
   EnsureCoreEntities();
+}
+
+ProceduralGame::~ProceduralGame() = default;
+
+void ProceduralGame::Initialize() {
+  if (art_)
+    art_->Initialize();
+}
+
+void ProceduralGame::Shutdown() {
+  if (art_)
+    art_->Shutdown();
 }
 
 void ProceduralGame::RegisterGameplayTypes() {
@@ -450,6 +682,7 @@ void ProceduralGame::EnsureCoreEntities() {
 
 void ProceduralGame::Update(const Engine::InputSystem &input, float deltaTime) {
   ENGINE_PROFILE_SCOPE("BaseGame Update");
+  visualTime_ += deltaTime;
   const PlayerCommand command = inputBindings_.BuildPlayerCommand(input);
   auto *movement = playerMovement_.Resolve();
   auto *weapon = playerWeapon_.Resolve();
@@ -526,6 +759,12 @@ Engine::Color ProceduralGame::GetClearColor() const {
 void ProceduralGame::Render(Engine::RenderContext &context) const {
   ENGINE_PROFILE_SCOPE("Mini RPG Render");
   Engine::Renderer2D &renderer = context.Draw2D();
+  if (!art_ || !art_->ready) {
+    renderer.DrawText("Chargement des SVG...", {24.0f, 24.0f}, 22,
+                      {235, 245, 210, 255});
+    return;
+  }
+  const ArtResources &art = *art_;
 
   const auto *player = playerEntity_.Resolve();
   const Engine::Vector2 playerPosition =
@@ -535,21 +774,130 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
                             static_cast<float>(GameConfig::WorldHeight) * 0.5f};
   const Engine::Vector2 camera = CameraFor(renderer, playerPosition);
 
-  DrawRetroWorld(renderer, camera);
-  DrawWater(renderer, camera, {2360.0f, 900.0f}, {380.0f, 170.0f});
-  DrawFlowerPatch(renderer, camera, {250.0f, 620.0f});
-  DrawFlowerPatch(renderer, camera, {920.0f, 720.0f});
-  DrawFlowerPatch(renderer, camera, {1850.0f, 600.0f});
-  DrawFlowerPatch(renderer, camera, {3020.0f, 610.0f});
-  DrawHouse(renderer, camera, {360.0f, 460.0f}, {146, 60, 48, 255});
-  DrawHouse(renderer, camera, {760.0f, 520.0f}, {80, 90, 160, 255});
-  DrawHouse(renderer, camera, {1420.0f, 420.0f}, {146, 60, 48, 255});
-  DrawHouse(renderer, camera, {1740.0f, 760.0f}, {80, 90, 160, 255});
-  DrawHouse(renderer, camera, {2150.0f, 560.0f}, {146, 60, 48, 255});
-  DrawHouse(renderer, camera, {2760.0f, 430.0f}, {80, 90, 160, 255});
-  DrawHouse(renderer, camera, {3200.0f, 700.0f}, {146, 60, 48, 255});
-  DrawHouse(renderer, camera, {3660.0f, 500.0f}, {80, 90, 160, 255});
-  DrawSign(renderer, camera, {1980.0f, 725.0f}, "TOWN");
+  constexpr float GroundTileSize = 320.0f;
+  const float firstGroundX =
+      std::floor(camera.x / GroundTileSize) * GroundTileSize;
+  const float firstGroundY =
+      std::floor(camera.y / GroundTileSize) * GroundTileSize;
+  for (float y = firstGroundY;
+       y < camera.y + static_cast<float>(renderer.GetHeight()) + GroundTileSize;
+       y += GroundTileSize) {
+    for (float x = firstGroundX;
+         x < camera.x + static_cast<float>(renderer.GetWidth()) + GroundTileSize;
+         x += GroundTileSize) {
+      DrawVectorArt(renderer, art.ground,
+                    WorldToScreen({x + GroundTileSize * 0.5f,
+                                   y + GroundTileSize * 0.5f},
+                                  camera),
+                    {GroundTileSize, GroundTileSize});
+    }
+  }
+
+  auto drawRoad = [&](Engine::Vector2 origin, Engine::Vector2 size,
+                      bool vertical) {
+    constexpr float RoadTileLength = 256.0f;
+    const float length = vertical ? size.y : size.x;
+    const float width = vertical ? size.x : size.y;
+    for (float offset = 0.0f; offset < length; offset += RoadTileLength) {
+      const float segmentLength = std::min(RoadTileLength, length - offset);
+      const Engine::Vector2 worldCenter =
+          vertical ? Engine::Vector2{origin.x + width * 0.5f,
+                                     origin.y + offset + segmentLength * 0.5f}
+                   : Engine::Vector2{origin.x + offset + segmentLength * 0.5f,
+                                     origin.y + width * 0.5f};
+      DrawVectorArt(renderer, art.road, WorldToScreen(worldCenter, camera),
+                    vertical ? Engine::Vector2{segmentLength, width}
+                             : Engine::Vector2{segmentLength, width},
+                    nullptr, vertical ? 90.0f : 0.0f);
+    }
+  };
+  drawRoad({0.0f, 620.0f}, {static_cast<float>(GameConfig::WorldWidth), 104.0f},
+           false);
+  drawRoad({540.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
+           true);
+  drawRoad({1160.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
+           true);
+  drawRoad({2040.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
+           true);
+  drawRoad({3180.0f, 0.0f}, {74.0f, static_cast<float>(GameConfig::WorldHeight)},
+           true);
+
+  auto drawHouse = [&](Engine::Vector2 origin, float hueShift) {
+    art.housePose->Reset();
+    Engine::VectorShapeTransform windows;
+    windows.opacity = 0.68f + 0.32f * (0.5f + 0.5f * std::sin(visualTime_ * 3.0f + hueShift));
+    art.housePose->SetGroupTransform(art.houseGroups[3], windows);
+    DrawVectorArt(renderer, art.house,
+                  WorldToScreen({origin.x + 60.0f, origin.y + 60.0f}, camera),
+                  {128.0f, 128.0f}, art.housePose.get());
+  };
+  auto drawTree = [&](Engine::Vector2 origin, float phase) {
+    art.treePose->Reset();
+    Engine::VectorShapeTransform crown;
+    crown.rotationDegrees = std::sin(visualTime_ * 1.7f + phase) * 4.0f;
+    crown.translation = {std::sin(visualTime_ * 1.3f + phase) * 1.6f, 0.0f};
+    art.treePose->SetGroupTransform(art.treeGroups[2], crown);
+    DrawVectorArt(renderer, art.tree, WorldToScreen(origin, camera), {56.0f, 76.0f},
+                  art.treePose.get());
+  };
+  auto drawFlowerPatch = [&](Engine::Vector2 origin) {
+    for (int y = 0; y < 3; ++y) {
+      for (int x = 0; x < 5; ++x) {
+        art.flowerPose->Reset();
+        Engine::VectorShapeTransform petals;
+        const float phase = static_cast<float>(x * 3 + y) * 0.47f;
+        const float pulse = 1.0f + 0.12f * std::sin(visualTime_ * 4.0f + phase);
+        petals.scale = {pulse, pulse};
+        petals.rotationDegrees = std::sin(visualTime_ * 2.0f + phase) * 9.0f;
+        art.flowerPose->SetGroupTransform(art.flowerGroups[1], petals);
+        DrawVectorArt(renderer, art.flower,
+                      WorldToScreen({origin.x + static_cast<float>(x * 14),
+                                     origin.y + static_cast<float>(y * 12)},
+                                    camera),
+                      {28.0f, 34.0f}, art.flowerPose.get());
+      }
+    }
+  };
+  auto drawWater = [&](Engine::Vector2 origin, Engine::Vector2 size) {
+    art.waterPose->Reset();
+    Engine::VectorShapeTransform waves;
+    waves.translation = {std::sin(visualTime_ * 2.7f) * 4.0f, 0.0f};
+    art.waterPose->SetGroupTransform(art.waterGroups[1], waves);
+    DrawVectorArt(renderer, art.water,
+                  WorldToScreen({origin.x + size.x * 0.5f,
+                                 origin.y + size.y * 0.5f},
+                                camera),
+                  size, art.waterPose.get());
+  };
+
+  for (int i = 0; i < 42; ++i) {
+    const float x = static_cast<float>((i * 211) % GameConfig::WorldWidth);
+    const float y = static_cast<float>((i * 97 + 53) % GameConfig::WorldHeight);
+    drawTree({x, y}, static_cast<float>(i) * 0.33f);
+  }
+
+  drawWater({2360.0f, 900.0f}, {380.0f, 170.0f});
+  drawFlowerPatch({250.0f, 620.0f});
+  drawFlowerPatch({920.0f, 720.0f});
+  drawFlowerPatch({1850.0f, 600.0f});
+  drawFlowerPatch({3020.0f, 610.0f});
+  drawHouse({360.0f, 460.0f}, 0.0f);
+  drawHouse({760.0f, 520.0f}, 1.0f);
+  drawHouse({1420.0f, 420.0f}, 2.0f);
+  drawHouse({1740.0f, 760.0f}, 3.0f);
+  drawHouse({2150.0f, 560.0f}, 4.0f);
+  drawHouse({2760.0f, 430.0f}, 5.0f);
+  drawHouse({3200.0f, 700.0f}, 6.0f);
+  drawHouse({3660.0f, 500.0f}, 7.0f);
+  art.signPose->Reset();
+  Engine::VectorShapeTransform spark;
+  spark.rotationDegrees = visualTime_ * 90.0f;
+  spark.opacity = 0.55f + 0.45f * (0.5f + 0.5f * std::sin(visualTime_ * 5.0f));
+  art.signPose->SetGroupTransform(art.signGroups[2], spark);
+  DrawVectorArt(renderer, art.sign, WorldToScreen({2020.0f, 755.0f}, camera),
+                {80.0f, 60.0f}, art.signPose.get());
+  renderer.DrawText("TOWN", WorldToScreen({1994.0f, 734.0f}, camera), 14,
+                    {48, 56, 36, 255});
 
   const NpcData npcs[]{
       {{1960.0f, 655.0f}, {190, 48, 80, 255}, "Salut! Bienvenue au village."},
@@ -566,7 +914,17 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
     if (screen.x >= -48.0f && screen.y >= -80.0f &&
         screen.x <= renderer.GetWidth() + 48.0f &&
         screen.y <= renderer.GetHeight() + 48.0f) {
-      DrawNpcSprite(renderer, screen, npc.clothes);
+      art.npcPose->Reset();
+      Engine::VectorShapeTransform body;
+      body.translation = {0.0f, std::sin(visualTime_ * 2.4f + npc.position.x * 0.01f) * 1.5f};
+      art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Body), body);
+      Engine::VectorShapeTransform head;
+      head.rotationDegrees = std::sin(visualTime_ * 1.8f + npc.position.y * 0.01f) * 5.0f;
+      art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Head), head);
+      art.npcPose->SetGroupTransform(NpcGroupId(art, NpcGroup::Eyes), head);
+      DrawVectorArt(renderer, art.npc, screen, {48.0f, 60.0f},
+                    art.npcPose.get(), 0.0f,
+                    {npc.clothes.red, npc.clothes.green, npc.clothes.blue, 255});
     }
     if (!nearbyNpc &&
         DistanceSquared(playerPosition, npc.position) <= 72.0f * 72.0f)
@@ -583,7 +941,30 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
     if (const auto *movement =
             player->GetComponent<BaseGame::PlayerMovement>().Resolve())
       facing = movement->Facing();
-    DrawPlayerSprite(renderer, WorldToScreen(playerPosition, camera), facing);
+    art.playerPose->Reset();
+    const float walk = std::sin((playerPosition.x + playerPosition.y) / 14.0f +
+                                visualTime_ * 8.0f);
+    Engine::VectorShapeTransform leftLeg;
+    leftLeg.translation = {walk * 2.5f, 0.0f};
+    leftLeg.rotationDegrees = walk * 9.0f;
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::LeftLeg),
+                                      leftLeg);
+    Engine::VectorShapeTransform rightLeg;
+    rightLeg.translation = {-walk * 2.5f, 0.0f};
+    rightLeg.rotationDegrees = -walk * 9.0f;
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::RightLeg),
+                                      rightLeg);
+    Engine::VectorShapeTransform head;
+    head.translation = {0.0f, std::sin(visualTime_ * 5.0f) * 1.2f};
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Head),
+                                      head);
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Hat),
+                                      head);
+    art.playerPose->SetGroupTransform(PlayerGroupId(art, PlayerGroup::Eyes),
+                                      head);
+    const float facingRotation = std::atan2(facing.y, facing.x) * 57.2957795f - 90.0f;
+    DrawVectorArt(renderer, art.player, WorldToScreen(playerPosition, camera),
+                  {58.0f, 72.0f}, art.playerPose.get(), facingRotation * 0.08f);
   }
 
   std::size_t entityCount = 0;
@@ -592,12 +973,12 @@ void ProceduralGame::Render(Engine::RenderContext &context) const {
       ++entityCount;
   }
 
-  DrawFilledRect(renderer, {14.0f, 14.0f}, {500.0f, 78.0f}, {15, 56, 15, 210});
-  renderer.DrawText("MINI RPG RETRO v2 - WASD / FLECHES POUR MARCHER",
+  DrawFilledRect(renderer, {14.0f, 14.0f}, {560.0f, 78.0f}, {5, 8, 22, 220});
+  renderer.DrawText("NEON SVG RPG - WASD / FLECHES POUR MARCHER",
                     {24.0f, 24.0f}, 20, {235, 245, 210, 255});
   renderer.DrawText(
-      "Grande carte side-scroll, maisons solides, routes et village",
-      {24.0f, 48.0f}, 18, {200, 220, 160, 255});
+      "Decor plus lisible: routes fixes, herbe ancree au monde, PNJ SVG",
+      {24.0f, 48.0f}, 18, {125, 231, 255, 255});
   renderer.DrawText("Entities: " + std::to_string(entityCount) + "   PNJ: 4",
                     {24.0f, 70.0f}, 18, {245, 245, 210, 255});
 #if !defined(GAME_RELEASE_BUILD)

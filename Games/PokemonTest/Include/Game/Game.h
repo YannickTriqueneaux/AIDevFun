@@ -6,12 +6,19 @@
 #include "Game/GameInput.h"
 #include "Game/GameplayComponents.h"
 
+#include <memory>
+
+struct ArtResources;
+
 class ProceduralGame final : public Engine::GameInterface {
 public:
   ProceduralGame();
+  ~ProceduralGame() override;
+  void Initialize() override;
   void Update(const Engine::InputSystem &input, float deltaTime) override;
   [[nodiscard]] Engine::Color GetClearColor() const override;
   void Render(Engine::RenderContext &context) const override;
+  void Shutdown() override;
   [[nodiscard]] std::vector<std::byte> SaveResumeState() const override;
   void ResumeFromState(std::span<const std::byte> state) override;
 #if defined(ENGINE_AUTOTESTS)
@@ -32,6 +39,8 @@ private:
   Engine::GameInstance gameInstance_;
   GameInput inputBindings_;
   Engine::Gameplay::World &world_;
+  std::unique_ptr<ArtResources> art_;
+  float visualTime_ = 0.0f;
   Engine::Gameplay::ObjectRef<Engine::Gameplay::Entity> playerEntity_;
   Engine::Gameplay::ObjectRef<BaseGame::PlayerMovement> playerMovement_;
   Engine::Gameplay::ObjectRef<BaseGame::PlayerWeapon> playerWeapon_;
