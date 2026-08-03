@@ -4,8 +4,8 @@ MakeYourOwnGame.AI is a lightweight C++ environment for creating small,
 procedural games with an AI development assistant.
 
 The goal is productivity: launch a game, play it, describe what you want to
-change, and keep playing while the assistant edits and rebuilds the game.
-When the result feels right, the same C++ game can be compiled in Release and
+change, and keep playing while the assistant is modifying the game seamlessly.
+When the result feels right, the same game can be compiled in Release and
 prepared for distribution.
 
 The assistant can create animated vector visuals, procedural sound effects, and
