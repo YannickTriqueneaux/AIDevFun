@@ -1,7 +1,9 @@
 #include "AssistantProviders/Codex/CodexEventParser.h"
 #include "Development/AssistantProvider.h"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -98,7 +100,7 @@ public:
   Development::AssistantResponse CreateResponse(
       std::string_view instructions, std::string_view prompt,
       const std::vector<Development::AssistantImageInput> &images,
-      std::string_view,
+      std::string_view previousResponseId,
       const Development::AssistantStreamCallback &onEvent) const override {
     const auto nonce = std::to_string(GetCurrentProcessId()) + "_" +
                        std::to_string(GetTickCount64());
@@ -140,6 +142,22 @@ public:
       command += " -c model_reasoning_effort=\"" + reasoningEffort_ + "\"";
     for (const auto &imagePath : imagePaths)
       command += " --image \"" + imagePath.string() + "\"";
+    if (!previousResponseId.empty()) {
+      onEvent({Development::AssistantStreamEventType::Status,
+               "Resuming the previous Codex conversation."});
+      const bool validSessionId =
+          previousResponseId.size() <= 128 &&
+          std::all_of(previousResponseId.begin(), previousResponseId.end(),
+                      [](unsigned char character) {
+                        return std::isalnum(character) || character == '-' ||
+                               character == '_';
+                      });
+      if (!validSessionId)
+        throw std::runtime_error("Invalid Codex session ID.");
+      command +=
+          " -c \"mcp_servers.game_tools.args=['--guidance-already-read']\"";
+      command += " resume \"" + std::string(previousResponseId) + "\"";
+    }
     command += " --output-last-message \"" + outputPath.string() + "\" - < \"" +
                promptPath.string() + "\" 2>&1\"";
     std::array<char, 4096> buffer{};

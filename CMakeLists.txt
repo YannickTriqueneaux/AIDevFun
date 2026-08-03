@@ -380,6 +380,8 @@ if(BUILD_TESTING)
     add_test(NAME AssistantHost.Midi COMMAND AssistantHostTests)
     add_test(NAME AssistantProvider.CodexMcp
              COMMAND GameToolsMcpServer --self-test)
+    add_test(NAME AssistantProvider.CodexMcpInheritedGuidance
+             COMMAND GameToolsMcpServer --self-test-inherited-guidance)
     add_test(
         NAME GameTools.CodeFiles
         COMMAND GameToolServiceTests

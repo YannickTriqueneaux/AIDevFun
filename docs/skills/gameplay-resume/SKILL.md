@@ -87,6 +87,15 @@ Preserve these invariants:
     Deliver the complete replacement in the current request unless the user
     explicitly asks for staged work. Preserve only infrastructure and concepts
     that remain genuinely compatible with the new game.
+18. A staged replacement limits only the amount of new functionality delivered;
+    it does not permit gameplay from the superseded genre to remain active or
+    dormant. Treat BaseGame gameplay as replaceable template scaffolding.
+    Remove obsolete registrations, factories, frame calls, spawning, combat,
+    collision, rendering, UI, and audio in the first replacement stage. Never
+    reuse legacy combat types as stand-ins for new concepts such as NPCs, and
+    never restore removed systems during a later request unless the user asks
+    explicitly. Add narrow processing for new events instead of re-enabling a
+    broad legacy frame function.
 ## BaseGame reference
 
 Use `Games/BaseGame` as the concrete architecture example:

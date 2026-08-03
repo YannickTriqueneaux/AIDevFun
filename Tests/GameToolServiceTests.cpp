@@ -80,6 +80,40 @@ int main(int argc, char **argv) {
                        {{"path", "Source/Widget.h"}, {"content", validCode}});
     Require(!response.at("ok"), "Existing Game file was overwritten.");
 
+    const std::string replacementCode =
+        "#pragma once\n\nnamespace Test {\nstruct Replacement {};\n}\n";
+    response =
+        Request(service, "replace_game_code_file",
+                {{"path", "Source/Widget.h"}, {"content", replacementCode}});
+    Require(response.at("ok") &&
+                std::ifstream(root / "Source" / "Widget.h").good(),
+            "Existing Game header was not replaced.");
+    {
+      std::ifstream stream(root / "Source" / "Widget.h");
+      const std::string content{std::istreambuf_iterator<char>(stream),
+                                std::istreambuf_iterator<char>()};
+      Require(content == replacementCode,
+              "Whole-file replacement content was incorrect.");
+    }
+
+    response = Request(service, "replace_game_code_file",
+                       {{"path", "Source/Widget.h"},
+                        {"content", "```cpp\nint Value() { return 1; }\n```"}});
+    Require(!response.at("ok"),
+            "Invalid whole-file replacement content was accepted.");
+    {
+      std::ifstream stream(root / "Source" / "Widget.h");
+      const std::string content{std::istreambuf_iterator<char>(stream),
+                                std::istreambuf_iterator<char>()};
+      Require(content == replacementCode,
+              "Rejected replacement modified the existing Game file.");
+    }
+
+    response = Request(service, "replace_game_code_file",
+                       {{"path", "Source/Legacy.hpp"}, {"content", validCode}});
+    Require(!response.at("ok"),
+            "Whole-file replacement accepted a forbidden extension.");
+
     response = Request(service, "create_game_code_file",
                        {{"path", "Source/Markdown.cpp"},
                         {"content", "```cpp\nint Value() { return 1; }\n```"}});

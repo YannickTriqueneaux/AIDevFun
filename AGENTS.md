@@ -15,6 +15,9 @@ treat the old gameplay as obsolete. Do not silently reduce the work to a reskin
 or first conversion pass. Create replacement types with new stable TypeIDs,
 remove obsolete gameplay and presentation resources, and complete the requested
 replacement now unless the user explicitly requests staged migration.
+Staging limits new scope only: remove obsolete template gameplay in the first
+stage, never keep it dormant, and never restore it during later work without an
+explicit user request.
 Keep assistant-only behavior under `AssistantHost`: prompts, OpenAI transport,
 pricing, settings, conversation state, model tools, and attachment decoding do
 not belong in `Engine`. Shared development protocols belong under

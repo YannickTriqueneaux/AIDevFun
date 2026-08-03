@@ -330,6 +330,20 @@ nlohmann::json CreateGameToolDefinitions() {
                  {"required", {"path", "oldText", "newText"}},
                  {"additionalProperties", false}}}}}},
             {"patches"}),
+       tool("replace_game_code_file",
+            "Atomically replace the complete contents of one existing Game "
+            "C++ file. Use this for intentional whole-file rewrites such as "
+            "replacing obsolete template orchestration; prefer exact patches "
+            "for localized edits. Only .cpp and .h paths are accepted, and "
+            "the complete content is validated as UTF-8 C++ source text.",
+            {{"path",
+              {{"type", "string"},
+               {"description",
+                "Existing .cpp or .h path relative to the Game."}}},
+             {"content",
+              {{"type", "string"},
+               {"description", "Complete replacement C++ source text."}}}},
+            {"path", "content"}),
        tool("create_game_code_file",
             "Create one new UTF-8 C++ file inside the active Game. Prefer this "
             "for cohesive new features, EntityTypes, ComponentTypes, vector "

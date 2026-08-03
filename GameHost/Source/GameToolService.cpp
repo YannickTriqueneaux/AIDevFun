@@ -109,19 +109,19 @@ bool IsValidUtf8(std::string_view content) {
   return true;
 }
 
-void ValidateNewCppContent(std::string_view content) {
+void ValidateCppContent(std::string_view content) {
   if (content.empty())
-    throw std::runtime_error("New C++ file content cannot be empty.");
+    throw std::runtime_error("C++ file content cannot be empty.");
   if (content.size() > MaximumFileSize)
-    throw std::runtime_error("New C++ file exceeds the 512 KiB limit.");
+    throw std::runtime_error("C++ file exceeds the 512 KiB limit.");
   if (!IsValidUtf8(content))
-    throw std::runtime_error("New C++ file must contain valid UTF-8 text.");
+    throw std::runtime_error("C++ file must contain valid UTF-8 text.");
   for (const unsigned char character : content) {
     if ((character < 0x20U && character != '\t' && character != '\r' &&
          character != '\n') ||
         character == 0x7fU) {
       throw std::runtime_error(
-          "New C++ file contains binary or unsupported control bytes.");
+          "C++ file contains binary or unsupported control bytes.");
     }
   }
 
@@ -131,7 +131,7 @@ void ValidateNewCppContent(std::string_view content) {
   for (const std::string_view fragment : ForbiddenFragments) {
     if (content.find(fragment) != std::string_view::npos)
       throw std::runtime_error(
-          "New C++ file contains Markdown, HTML, or embedded document data.");
+          "C++ file contains Markdown, HTML, or embedded document data.");
   }
 
   static constexpr std::array CppMarkers{
@@ -148,7 +148,7 @@ void ValidateNewCppContent(std::string_view content) {
                                 content.find('}') != std::string_view::npos;
   if (!hasDeclarationMarker && !hasFunctionShape)
     throw std::runtime_error(
-        "New file was rejected because it does not look like C++ code.");
+        "File was rejected because it does not look like C++ code.");
 }
 
 std::string ReadTextFile(const std::filesystem::path &path) {
@@ -559,11 +559,24 @@ std::string GameToolService::HandleRequest(std::string_view request) {
       result = {{"changed", true},
                 {"patchCount", patches.size()},
                 {"files", std::move(files)}};
+    } else if (command == "replace_game_code_file") {
+      const std::filesystem::path file =
+          ResolveGameFile(arguments.at("path").get<std::string>());
+      if (!IsCreatableSourceExtension(file))
+        throw std::runtime_error(
+            "Only existing .cpp and .h Game files may be replaced.");
+      const std::string content = arguments.at("content").get<std::string>();
+      ValidateCppContent(content);
+      WriteTextFileAtomically(file, content);
+      result = {
+          {"path", std::filesystem::relative(file, gameRoot_).generic_string()},
+          {"replaced", true},
+          {"validatedAs", "C++ source text"}};
     } else if (command == "create_game_code_file") {
       const std::filesystem::path file =
           ResolveNewGameFile(arguments.at("path").get<std::string>());
       const std::string content = arguments.at("content").get<std::string>();
-      ValidateNewCppContent(content);
+      ValidateCppContent(content);
       CreateTextFileAtomically(file, content);
       result = {
           {"path", std::filesystem::relative(file, gameRoot_).generic_string()},

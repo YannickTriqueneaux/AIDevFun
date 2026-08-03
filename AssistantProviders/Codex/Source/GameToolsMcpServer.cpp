@@ -91,6 +91,13 @@ Json Tools() {
                         {"required", {"path", "oldText", "newText"}},
                         {"additionalProperties", false}}}}}},
                    {"patches"})),
+       Tool("replace_game_code_file",
+            "Atomically replace one complete existing .cpp or .h Game file "
+            "with validated C++ source. Use for intentional whole-file "
+            "rewrites; use exact patches for localized edits.",
+            Schema({{"path", {{"type", "string"}}},
+                    {"content", {{"type", "string"}}}},
+                   {"path", "content"})),
        Tool("create_game_code_file",
             "Create a validated .cpp or .h file for a cohesive new Game "
             "feature or type instead of growing an unrelated catch-all file.",
@@ -118,10 +125,21 @@ Json Error(const Json &id, int code, std::string message) {
           {"error", {{"code", code}, {"message", std::move(message)}}}};
 }
 
+struct GuidanceState {
+  bool inspectedSkills = false;
+  bool readApplicableSkill = false;
+  bool readArchitecture = false;
+};
+
+GuidanceState guidanceState;
+
+void MarkGuidanceAsInherited() {
+  guidanceState = {.inspectedSkills = true,
+                   .readApplicableSkill = true,
+                   .readArchitecture = true};
+}
+
 Json Handle(const Json &request) {
-  static bool skillsInspected = false;
-  static bool applicableSkillRead = false;
-  static bool architectureRead = false;
   const Json id = request.value("id", Json(nullptr));
   const std::string method = request.value("method", "");
   if (method == "initialize") {
@@ -146,14 +164,14 @@ Json Handle(const Json &request) {
                {"isError", false}});
     if (name == "confirm_no_applicable_skills") {
       const std::string reason = arguments.value("reason", "");
-      if (!skillsInspected || reason.size() < 12)
+      if (!guidanceState.inspectedSkills || reason.size() < 12)
         return Result(
             id, {{"content",
                   Json::array({{{"type", "text"},
                                 {"text", "List skills first and provide a "
                                          "concrete reason."}}})},
                  {"isError", true}});
-      applicableSkillRead = true;
+      guidanceState.readApplicableSkill = true;
       return Result(
           id, {{"content",
                 Json::array({{{"type", "text"},
@@ -162,10 +180,12 @@ Json Handle(const Json &request) {
     }
     const bool mutatesGame =
         name == "apply_game_patch" || name == "apply_game_patches" ||
-        name == "create_game_code_file" || name == "delete_game_code_file" ||
-        name == "build_game" || name == "reload_game" || name == "launch_game";
+        name == "create_game_code_file" || name == "replace_game_code_file" ||
+        name == "delete_game_code_file" || name == "build_game" ||
+        name == "reload_game" || name == "launch_game";
     if (mutatesGame &&
-        (!skillsInspected || !applicableSkillRead || !architectureRead)) {
+        (!guidanceState.inspectedSkills || !guidanceState.readApplicableSkill ||
+         !guidanceState.readArchitecture)) {
       return Result(
           id,
           {{"content",
@@ -184,12 +204,12 @@ Json Handle(const Json &request) {
     const Json gameResponse = Json::parse(raw);
     const bool ok = gameResponse.value("ok", false);
     if (ok && name == "list_agent_skills")
-      skillsInspected = true;
+      guidanceState.inspectedSkills = true;
     if (ok && name == "read_agent_skill")
-      applicableSkillRead = true;
+      guidanceState.readApplicableSkill = true;
     if (ok && name == "read_agent_document" &&
         arguments.value("name", "") == "Architecture.md")
-      architectureRead = true;
+      guidanceState.readArchitecture = true;
     return Result(
         id, {{"content", Json::array({{{"type", "text"}, {"text", raw}}})},
              {"isError", !ok}});
@@ -200,6 +220,18 @@ Json Handle(const Json &request) {
 
 int main(int argc, char **argv) {
   std::ios::sync_with_stdio(false);
+  const bool inheritedGuidance =
+      argc == 2 && std::string_view(argv[1]) == "--guidance-already-read";
+  if (inheritedGuidance)
+    MarkGuidanceAsInherited();
+  if (argc == 2 &&
+      std::string_view(argv[1]) == "--self-test-inherited-guidance") {
+    MarkGuidanceAsInherited();
+    return guidanceState.inspectedSkills && guidanceState.readApplicableSkill &&
+                   guidanceState.readArchitecture
+               ? 0
+               : 1;
+  }
   if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
     const Json initialized =
         Handle({{"jsonrpc", "2.0"}, {"id", 1}, {"method", "initialize"}});

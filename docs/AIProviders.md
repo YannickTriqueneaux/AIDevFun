@@ -62,6 +62,7 @@ existing ChatGPT sign-in. Its settings are stored in
 - `reasoningEffort` is passed as Codex model configuration.
 - Pasted images are decoded to temporary files, passed with `--image`, and
   deleted after the response.
+- The provider captures the Codex thread ID from JSONL events and uses `codex exec resume` for the next prompt, so short follow-ups retain the preceding request, inspection, tool results, and decisions.
 - An empty `gameToolsMcpExecutable` selects `GameToolsMcpServer.exe` beside the
   provider settings. The MCP server exposes the restricted Game tools and
   relays them to `GameToolService` through its existing named pipe.
@@ -75,6 +76,8 @@ The provider enables Codex MCP tool discovery because current Codex CLI builds
 defer custom MCP tools until the model searches for a relevant operation. Each
 tool also declares MCP safety annotations, allowing read-only operations and
 controlled Game mutations to be handled according to their actual effects.
+
+For a resumed Codex thread, the provider starts the fresh stdio MCP bridge with an inherited-guidance marker. The first prompt still has to inspect applicable skills and `Architecture.md`; later prompts in that same thread reuse the conversation context and are not gated on rereading identical documents. New applicable domains still require their skill.
 
 The MCP bridge exposes repository skills and top-level agent documents as
 read-only tools. Before it permits a Game mutation, build, reload, or recovery
