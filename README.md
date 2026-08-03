@@ -367,6 +367,11 @@ MakeYourOwnGame.AI uses the custom
 **MakeYourOwnGame.AI Source-Available Contribution and Commercial Game License
 1.0**.
 
+This repository is intended for research, experimentation, and the fun of
+creating simple games that can be shared for free. If it is used to create and
+sell a commercial game, the reporting and royalty requirements described
+below apply.
+
 In summary:
 
 - infrastructure modifications outside `Games/` must be provided to the
