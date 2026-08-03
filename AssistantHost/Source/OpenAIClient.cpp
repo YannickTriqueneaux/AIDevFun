@@ -373,6 +373,21 @@ nlohmann::json CreateGameToolDefinitions() {
        tool("read_build_output",
             "Read output from the latest controlled Game build.",
             nlohmann::json::object(), nlohmann::json::array()),
+       tool("get_git_status",
+            "Check whether this repository can commit and push, and get its "
+            "GitHub or GitLab web URL.",
+            nlohmann::json::object(), nlohmann::json::array()),
+       tool("read_git_changes",
+            "Read repository status and the diff since HEAD before generating "
+            "a commit title and description.",
+            nlohmann::json::object(), nlohmann::json::array()),
+       tool("commit_and_push_changes",
+            "Stage the whole repository, commit with the generated title and "
+            "description, and push the current branch to its upstream. Call "
+            "read_git_changes first.",
+            {{"title", { {"type", "string"} }},
+             {"description", { {"type", "string"} }}},
+            {"title", "description"}),
        tool("inspect_crash_diagnostics",
             "Read the newest non-Release crash reports and process logs. "
             "Use this first when GameHost is in crash recovery mode.",
@@ -403,6 +418,7 @@ OpenAIResponse SendResponseRequest(const OpenAISettings &settings,
       {"stream", true}};
   if (allowTools) {
     request["tools"] = CreateGameToolDefinitions();
+    request["tools"].push_back({{"type", "web_search"}});
     request["tool_choice"] = "auto";
     request["parallel_tool_calls"] = true;
   }

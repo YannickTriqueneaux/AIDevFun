@@ -37,6 +37,10 @@ private:
   [[nodiscard]] std::filesystem::path
   ResolveAgentDocument(std::string_view name) const;
   [[nodiscard]] std::string BuildGame();
+  [[nodiscard]] std::string GetGitStatus() const;
+  [[nodiscard]] std::string ReadGitChanges() const;
+  [[nodiscard]] std::string CommitAndPushChanges(std::string_view title,
+                                                 std::string_view description);
   [[nodiscard]] std::string ReadCrashDiagnostics() const;
 
   ReloadableGame *game_ = nullptr;
@@ -44,11 +48,13 @@ private:
   std::filesystem::path engineRoot_;
   std::filesystem::path skillsRoot_;
   std::filesystem::path documentsRoot_;
+  std::filesystem::path repositoryRoot_;
   std::filesystem::path buildDirectory_;
   std::filesystem::path runtimeDirectory_;
   bool recoveryMode_ = false;
   std::atomic_bool launchRequested_ = false;
   std::mutex buildMutex_;
+  std::mutex gitMutex_;
   std::string lastBuildOutput_ = "No Game build has run yet.";
   Engine::NamedPipeServer server_;
 };

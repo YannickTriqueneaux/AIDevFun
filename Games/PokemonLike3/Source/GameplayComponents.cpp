@@ -57,6 +57,54 @@ float DistanceSquared(Engine::Vector2 left, Engine::Vector2 right) {
   const float y = left.y - right.y;
   return x * x + y * y;
 }
+
+struct SolidRect {
+  Engine::Vector2 center;
+  Engine::Vector2 halfSize;
+};
+
+constexpr SolidRect HouseSolids[] = {
+    {{1010.0f, 204.0f}, {94.0f, 58.0f}},
+    {{210.0f, 568.0f}, {94.0f, 58.0f}},
+    {{720.0f, 578.0f}, {94.0f, 58.0f}},
+};
+
+void ClampToTownBounds(Engine::Vector2 &position) {
+  position.x = std::clamp(position.x, TownLeft + CharacterHalfWidth,
+                          TownRight - CharacterHalfWidth);
+  position.y = std::clamp(position.y, TownTop + CharacterHalfHeight,
+                          TownBottom - CharacterHalfHeight);
+}
+
+bool IsBlockedByHouses(Engine::Vector2 position) {
+  const float segmentWidth = static_cast<float>(GameConfig::PlayAreaWidth);
+  const int segment = std::clamp(static_cast<int>(position.x / segmentWidth), 0, 3);
+  const float localX = position.x - static_cast<float>(segment) * segmentWidth;
+  for (const SolidRect &house : HouseSolids) {
+    if (localX + CharacterHalfWidth < house.center.x - house.halfSize.x ||
+        localX - CharacterHalfWidth > house.center.x + house.halfSize.x ||
+        position.y + CharacterHalfHeight < house.center.y - house.halfSize.y ||
+        position.y - CharacterHalfHeight > house.center.y + house.halfSize.y)
+      continue;
+    return true;
+  }
+  return false;
+}
+
+void MoveWithTownCollision(Engine::Gameplay::Entity &entity, Engine::Vector2 delta) {
+  Engine::Vector2 position = entity.transform.position;
+  Engine::Vector2 next{position.x + delta.x, position.y};
+  ClampToTownBounds(next);
+  if (!IsBlockedByHouses(next))
+    position.x = next.x;
+
+  next = {position.x, position.y + delta.y};
+  ClampToTownBounds(next);
+  if (!IsBlockedByHouses(next))
+    position.y = next.y;
+
+  entity.transform.position = position;
+}
 } // namespace
 
 CharacterMotion::CharacterMotion(ObjectRef<Engine::Gameplay::Entity> owner)
@@ -80,13 +128,7 @@ void CharacterMotion::Update(float deltaTime) {
     walkCycle_ = 0.0f;
   }
 
-  entity->transform.position += velocity_ * deltaTime;
-  entity->transform.position.x =
-      std::clamp(entity->transform.position.x, TownLeft + CharacterHalfWidth,
-                 TownRight - CharacterHalfWidth);
-  entity->transform.position.y =
-      std::clamp(entity->transform.position.y, TownTop + CharacterHalfHeight,
-                 TownBottom - CharacterHalfHeight);
+  MoveWithTownCollision(*entity, velocity_ * deltaTime);
   command_ = {};
 }
 
@@ -144,13 +186,7 @@ void PokemonRoam::Update(float deltaTime) {
 
   const Engine::Vector2 direction = NormalizeOrZero(toTarget);
   facing_ = DirectionFromVector(direction, facing_);
-  entity->transform.position += direction * (movementSpeed_ * deltaTime);
-  entity->transform.position.x = std::clamp(entity->transform.position.x,
-                                            TownLeft + CharacterHalfWidth,
-                                            TownRight - CharacterHalfWidth);
-  entity->transform.position.y = std::clamp(entity->transform.position.y,
-                                            TownTop + CharacterHalfHeight,
-                                            TownBottom - CharacterHalfHeight);
+  MoveWithTownCollision(*entity, direction * (movementSpeed_ * deltaTime));
 }
 
 void PokemonRoam::SaveState(StateWriter &writer) const {
@@ -243,13 +279,7 @@ void NpcWander::Update(float deltaTime) {
 
   const Engine::Vector2 direction = NormalizeOrZero(toTarget);
   facing_ = DirectionFromVector(direction, facing_);
-  entity->transform.position += direction * (movementSpeed_ * deltaTime);
-  entity->transform.position.x = std::clamp(entity->transform.position.x,
-                                            TownLeft + CharacterHalfWidth,
-                                            TownRight - CharacterHalfWidth);
-  entity->transform.position.y = std::clamp(entity->transform.position.y,
-                                            TownTop + CharacterHalfHeight,
-                                            TownBottom - CharacterHalfHeight);
+  MoveWithTownCollision(*entity, direction * (movementSpeed_ * deltaTime));
   walkCycle_ += deltaTime * 6.2f;
 }
 

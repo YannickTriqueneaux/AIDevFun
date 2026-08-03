@@ -28,13 +28,18 @@ public:
   void EndPanel();
 
   [[nodiscard]] bool Button(std::string_view label, Vector2 size);
+  void SameLine();
+  void BeginDisabled(bool disabled = true);
+  void EndDisabled();
+  void SetItemTooltip(std::string_view text);
 
   [[nodiscard]] bool BeginChild(std::string_view id, Vector2 size,
                                 bool border = false);
   void EndChild();
 
   [[nodiscard]] bool InputText(std::string_view label, std::string_view hint,
-                               std::string &value, bool submitOnEnter = true);
+                               std::string &value, bool submitOnEnter = true,
+                               float width = -1.0f);
   [[nodiscard]] bool IsPasteShortcutPressed() const;
 
   void Text(std::string_view text, Color color);

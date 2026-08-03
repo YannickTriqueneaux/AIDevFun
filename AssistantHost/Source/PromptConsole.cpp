@@ -15,6 +15,8 @@
 #include <sstream>
 #include <utility>
 
+#include <nlohmann/json.hpp>
+
 namespace {
 constexpr float PanelWidth = 420.0f;
 constexpr float ToggleWidth = 44.0f;
@@ -28,6 +30,7 @@ constexpr Engine::Color InformationColor{145, 150, 165, 255};
 constexpr std::size_t MaximumPromptImages = 4;
 constexpr std::size_t MaximumPromptFileAttachments = 2;
 constexpr int MaximumImageDimension = 2048;
+constexpr float GitButtonWidth = 92.0f;
 
 std::string EncodeBase64(const unsigned char *data, std::size_t size) {
   static constexpr char Alphabet[] =
@@ -89,6 +92,7 @@ PromptConsole::PromptConsole(Development::AssistantProvider &provider,
            ? processor_.GetProviderName() + " ready with model " +
                  processor_.GetModel() + "."
            : processor_.GetProviderName() + " is not configured."});
+  RefreshGitStatus();
 }
 
 void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
@@ -224,10 +228,23 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
       }
     }
 
+    const float promptWidth = std::max(
+        80.0f, ui.GetAvailableWidth() - GitButtonWidth - 8.0f);
     const bool submitted = ui.InputText(
         "##PromptInput",
         "Type a prompt, paste an image or MIDI file, and press Enter...",
-        promptInput_);
+        promptInput_, true, promptWidth);
+    ui.SameLine();
+    ui.BeginDisabled(!gitPushAvailable_ || pendingRequest_.valid());
+    const bool commitRequested =
+        ui.Button("Save&Push", {GitButtonWidth, 0.0f});
+    if (!gitPushAvailable_ || pendingRequest_.valid()) {
+      ui.SetItemTooltip(
+          gitPushAvailable_
+              ? "Wait for the current assistant response to finish."
+              : gitStatusMessage_);
+    }
+    ui.EndDisabled();
     if (ui.IsPasteShortcutPressed()) {
       if (!PasteClipboardFile())
         PasteClipboardImage();
@@ -235,8 +252,37 @@ void PromptConsole::Render(UiSystem &ui, int screenWidth, int screenHeight) {
     if (submitted) {
       SubmitPrompt();
     }
+    if (commitRequested) {
+      promptInput_ =
+          "Inspect all uncommitted repository changes with read_git_changes. "
+          "Generate a concise commit title and a useful description covering "
+          "the changes since the last commit, then call "
+          "commit_and_push_changes. Do not edit files for this request.";
+      SubmitPrompt();
+    }
   }
   ui.EndPanel();
+}
+
+void PromptConsole::RefreshGitStatus() {
+  try {
+    const nlohmann::json response = nlohmann::json::parse(
+        gameTools_.Execute("get_git_status", "{}"));
+    if (response.value("ok", false)) {
+      const auto &result = response.at("result");
+      gitPushAvailable_ =
+          result.value("canCommitAndPush", false);
+      gitStatusMessage_ =
+          result.value("message", "Git commit and push are unavailable.");
+    } else {
+      gitPushAvailable_ = false;
+      gitStatusMessage_ = response.value("error", "Git service unavailable.");
+    }
+  } catch (const std::exception &exception) {
+    gitPushAvailable_ = false;
+    gitStatusMessage_ =
+        std::string("Unable to check Git status: ") + exception.what();
+  }
 }
 
 bool PromptConsole::PasteClipboardFile() {
@@ -435,6 +481,7 @@ void PromptConsole::PollPendingRequest() {
                        FormatCost("session", sessionUsage_,
                                   sessionCostAvailable_, sessionCostUsd_));
   Engine::Logger::Info("Pending assistant request joined by the UI thread.");
+  RefreshGitStatus();
 }
 
 void PromptConsole::PollStreamEvents() {

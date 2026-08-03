@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -18,6 +19,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
+#include <cstring>
 
 #include <nlohmann/json.hpp>
 
@@ -32,6 +34,64 @@ constexpr std::size_t MaximumSearchResults = 100;
 constexpr std::size_t MaximumBatchFiles = 16;
 constexpr std::size_t MaximumBatchPatches = 32;
 constexpr std::size_t MaximumBatchReadSize = 3 * 1024 * 1024;
+constexpr std::size_t MaximumGitOutput = 1024 * 1024;
+
+struct CommandResult {
+  int exitCode = -1;
+  std::string output;
+};
+
+CommandResult RunCommand(const std::string &command,
+                         std::size_t outputLimit = MaximumGitOutput) {
+  std::array<char, 4096> buffer{};
+  CommandResult result;
+  FILE *pipe = _popen(command.c_str(), "r");
+  if (!pipe)
+    throw std::runtime_error("Unable to start command.");
+  while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe)) {
+    const std::size_t available = outputLimit - result.output.size();
+    if (available > 0) {
+      const std::size_t byteCount = std::strlen(buffer.data()) < available
+                                        ? std::strlen(buffer.data())
+                                        : available;
+      result.output.append(buffer.data(), byteCount);
+    }
+  }
+  result.exitCode = _pclose(pipe);
+  return result;
+}
+
+std::string Trim(std::string value) {
+  while (!value.empty() && (value.back() == '\r' || value.back() == '\n' ||
+                            value.back() == ' ' || value.back() == '\t'))
+    value.pop_back();
+  return value;
+}
+
+std::string ToWebRepositoryUrl(std::string remote) {
+  remote = Trim(std::move(remote));
+  if (remote.ends_with(".git"))
+    remote.resize(remote.size() - 4);
+  if (remote.starts_with("git@")) {
+    const auto colon = remote.find(':');
+    if (colon != std::string::npos)
+      remote = "https://" + remote.substr(4, colon - 4) + "/" +
+               remote.substr(colon + 1);
+  } else if (remote.starts_with("ssh://git@")) {
+    remote = "https://" + remote.substr(10);
+  }
+  const auto scheme = remote.find("://");
+  if (scheme != std::string::npos) {
+    const auto authorityEnd = remote.find('/', scheme + 3);
+    const auto userInfo = remote.find('@', scheme + 3);
+    if (userInfo != std::string::npos &&
+        (authorityEnd == std::string::npos || userInfo < authorityEnd))
+      remote.erase(scheme + 3, userInfo - (scheme + 3) + 1);
+  }
+  return remote.starts_with("https://") || remote.starts_with("http://")
+             ? remote
+             : std::string{};
+}
 
 #if defined(ENGINE_AUTOTESTS)
 class JsonStateSerializer final : public Engine::Serializer {
@@ -261,6 +321,8 @@ GameToolService::GameToolService(ReloadableGame *game,
           gameRoot_.parent_path().parent_path() / "docs" / "skills")),
       documentsRoot_(std::filesystem::weakly_canonical(
           gameRoot_.parent_path().parent_path() / "docs")),
+      repositoryRoot_(std::filesystem::weakly_canonical(
+          gameRoot_.parent_path().parent_path())),
       buildDirectory_(std::filesystem::weakly_canonical(buildDirectory)),
       runtimeDirectory_(std::filesystem::weakly_canonical(runtimeDirectory)),
       recoveryMode_(recoveryMode), server_(Development::GetGameToolsPipeName(),
@@ -598,6 +660,14 @@ std::string GameToolService::HandleRequest(std::string_view request) {
     } else if (command == "read_build_output") {
       std::scoped_lock lock(buildMutex_);
       result = {{"output", lastBuildOutput_}};
+    } else if (command == "get_git_status") {
+      result = nlohmann::json::parse(GetGitStatus());
+    } else if (command == "read_git_changes") {
+      result = nlohmann::json::parse(ReadGitChanges());
+    } else if (command == "commit_and_push_changes") {
+      result = nlohmann::json::parse(CommitAndPushChanges(
+          arguments.at("title").get<std::string>(),
+          arguments.at("description").get<std::string>()));
     } else if (command == "reload_game") {
       if (!game_) {
         throw std::runtime_error(
@@ -845,5 +915,135 @@ std::string GameToolService::BuildGame() {
   return nlohmann::json({{"success", exitCode == 0},
                          {"exitCode", exitCode},
                          {"output", output}})
+      .dump();
+}
+
+std::string GameToolService::GetGitStatus() const {
+  const std::string git = "git -C \"" + repositoryRoot_.string() + "\" ";
+  const CommandResult workTree =
+      RunCommand(git + "rev-parse --is-inside-work-tree 2>&1");
+  if (workTree.exitCode != 0 || Trim(workTree.output) != "true")
+    return nlohmann::json({{"canCommitAndPush", false},
+                           {"message", "Not a Git worktree."}})
+        .dump();
+
+  const CommandResult upstream =
+      RunCommand(git + "rev-parse --abbrev-ref --symbolic-full-name "
+                       "\"@{upstream}\" 2>&1");
+  if (upstream.exitCode != 0)
+    return nlohmann::json({{"canCommitAndPush", false},
+                           {"message", "The current branch has no upstream."}})
+        .dump();
+  const std::string upstreamName = Trim(upstream.output);
+  const auto slash = upstreamName.find('/');
+  if (slash == std::string::npos)
+    return nlohmann::json({{"canCommitAndPush", false},
+                           {"message", "The upstream remote is invalid."}})
+        .dump();
+  const std::string remoteName = upstreamName.substr(0, slash);
+  if (!std::ranges::all_of(remoteName, [](unsigned char character) {
+        return std::isalnum(character) || character == '-' ||
+               character == '_' || character == '.';
+      }))
+    return nlohmann::json({{"canCommitAndPush", false},
+                           {"message", "The upstream remote name is invalid."}})
+        .dump();
+  const CommandResult remote =
+      RunCommand(git + "remote get-url --push " + remoteName + " 2>&1");
+  if (remote.exitCode != 0)
+    return nlohmann::json({{"canCommitAndPush", false},
+                           {"message", "No push URL is configured."}})
+        .dump();
+
+  const CommandResult changes =
+      RunCommand(git + "status --porcelain=v1 --untracked-files=all 2>&1");
+  const bool hasChanges = changes.exitCode == 0 && !Trim(changes.output).empty();
+  const CommandResult dryRun = RunCommand(
+      "set GIT_TERMINAL_PROMPT=0&& " + git + "push --dry-run 2>&1");
+  const bool canPush = dryRun.exitCode == 0;
+  return nlohmann::json(
+             {{"canCommitAndPush", canPush && hasChanges},
+              {"pushConfigured", canPush},
+              {"hasChanges", hasChanges},
+              {"upstream", upstreamName},
+              {"repositoryWebUrl", ToWebRepositoryUrl(remote.output)},
+              {"message", canPush ? (hasChanges ? "Ready to commit and push."
+                                                  : "No uncommitted changes.")
+                                   : "A dry-run push failed: " +
+                                         Trim(dryRun.output)}})
+      .dump();
+}
+
+std::string GameToolService::ReadGitChanges() const {
+  const std::string git = "git -C \"" + repositoryRoot_.string() + "\" ";
+  const CommandResult status =
+      RunCommand(git + "status --short --untracked-files=all 2>&1");
+  if (status.exitCode != 0)
+    throw std::runtime_error("Unable to inspect Git changes: " + status.output);
+  const CommandResult diff = RunCommand(
+      git + "diff --no-ext-diff --stat HEAD && " + git +
+      "diff --no-ext-diff --unified=3 HEAD 2>&1", MaximumGitOutput);
+  if (diff.exitCode != 0)
+    throw std::runtime_error("Unable to read Git diff: " + diff.output);
+  const auto gitStatus = nlohmann::json::parse(GetGitStatus());
+  return nlohmann::json({{"status", status.output},
+                         {"diff", diff.output},
+                         {"repositoryWebUrl",
+                          gitStatus.value("repositoryWebUrl", "")},
+                         {"truncated", diff.output.size() >= MaximumGitOutput}})
+      .dump();
+}
+
+std::string GameToolService::CommitAndPushChanges(
+    std::string_view title, std::string_view description) {
+  std::scoped_lock lock(gitMutex_);
+  if (title.empty() || title.size() > 72 || description.empty() ||
+      description.size() > 4000 || title.find_first_of("\r\n") !=
+                                       std::string_view::npos)
+    throw std::runtime_error(
+        "Commit title must be 1-72 characters and description 1-4000 characters.");
+  for (const unsigned char character : std::string(title) +
+                                           std::string(description)) {
+    if (character < 0x20U && character != '\r' && character != '\n' &&
+        character != '\t')
+      throw std::runtime_error("Commit description contains control bytes.");
+  }
+  const auto status = nlohmann::json::parse(GetGitStatus());
+  if (!status.value("canCommitAndPush", false))
+    throw std::runtime_error(status.value("message", "Git push is unavailable."));
+
+  const std::filesystem::path messagePath =
+      std::filesystem::temp_directory_path() /
+      ("aitester_git_message_" + std::to_string(GetCurrentProcessId()) +
+       ".txt");
+  {
+    std::ofstream message(messagePath, std::ios::binary | std::ios::trunc);
+    message << title << "\n\n" << description << "\n";
+    if (!message)
+      throw std::runtime_error("Unable to create the Git commit message.");
+  }
+  const std::string git = "git -C \"" + repositoryRoot_.string() + "\" ";
+  const CommandResult add = RunCommand(git + "add --all 2>&1");
+  if (add.exitCode != 0) {
+    std::filesystem::remove(messagePath);
+    throw std::runtime_error("Git staging failed: " + add.output);
+  }
+  const CommandResult commit = RunCommand(
+      git + "commit --file \"" + messagePath.string() + "\" 2>&1");
+  std::filesystem::remove(messagePath);
+  if (commit.exitCode != 0)
+    throw std::runtime_error("Git commit failed: " + commit.output);
+  const CommandResult push = RunCommand(
+      "set GIT_TERMINAL_PROMPT=0&& " + git + "push 2>&1");
+  if (push.exitCode != 0)
+    throw std::runtime_error("Commit created, but Git push failed: " +
+                             push.output);
+  return nlohmann::json({{"committed", true},
+                         {"pushed", true},
+                         {"title", title},
+                         {"commitOutput", commit.output},
+                         {"pushOutput", push.output},
+                         {"repositoryWebUrl",
+                          status.value("repositoryWebUrl", "")}})
       .dump();
 }

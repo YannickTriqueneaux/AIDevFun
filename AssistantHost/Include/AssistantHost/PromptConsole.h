@@ -2,6 +2,7 @@
 
 #include "AssistantHost/PromptMessage.h"
 #include "AssistantHost/PromptProcessor.h"
+#include "AssistantHost/GameToolClient.h"
 
 #include <filesystem>
 #include <future>
@@ -56,6 +57,7 @@ private:
   void PollStreamEvents();
   void PollAutomaticPrompt();
   void PasteClipboardImage();
+  void RefreshGitStatus();
   [[nodiscard]] bool PasteClipboardFile();
 
   std::vector<PromptMessage> messages_;
@@ -65,6 +67,7 @@ private:
   std::vector<PromptTextAttachment> promptFileAttachments_;
   PromptAttachmentProvider *attachmentProvider_ = nullptr;
   PromptProcessor processor_;
+  GameToolClient gameTools_;
   PromptConsoleOptions options_;
   std::future<PromptProcessResult> pendingRequest_;
   std::mutex streamEventsMutex_;
@@ -82,5 +85,7 @@ private:
   bool expanded_ = false;
   bool scrollToLatest_ = true;
   bool focusInput_ = true;
+  bool gitPushAvailable_ = false;
+  std::string gitStatusMessage_ = "Git status is unavailable.";
 };
 } // namespace AssistantHost

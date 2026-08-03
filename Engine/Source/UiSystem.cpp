@@ -74,6 +74,22 @@ bool UiSystem::Button(std::string_view label, Vector2 size) {
   return ImGui::Button(terminatedLabel.c_str(), {size.x, size.y});
 }
 
+void UiSystem::SameLine() { ImGui::SameLine(); }
+
+void UiSystem::BeginDisabled(bool disabled) { ImGui::BeginDisabled(disabled); }
+
+void UiSystem::EndDisabled() { ImGui::EndDisabled(); }
+
+void UiSystem::SetItemTooltip(std::string_view text) {
+  if (!ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    return;
+  ImGui::BeginTooltip();
+  ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28.0f);
+  ImGui::TextUnformatted(text.data(), text.data() + text.size());
+  ImGui::PopTextWrapPos();
+  ImGui::EndTooltip();
+}
+
 bool UiSystem::BeginChild(std::string_view id, Vector2 size, bool border) {
   const std::string terminatedId(id);
   return ImGui::BeginChild(terminatedId.c_str(), {size.x, size.y}, border);
@@ -82,14 +98,14 @@ bool UiSystem::BeginChild(std::string_view id, Vector2 size, bool border) {
 void UiSystem::EndChild() { ImGui::EndChild(); }
 
 bool UiSystem::InputText(std::string_view label, std::string_view hint,
-                         std::string &value, bool submitOnEnter) {
+                         std::string &value, bool submitOnEnter, float width) {
   const std::string terminatedLabel(label);
   const std::string terminatedHint(hint);
   const ImGuiInputTextFlags flags = submitOnEnter
                                         ? ImGuiInputTextFlags_EnterReturnsTrue
                                         : ImGuiInputTextFlags_None;
 
-  ImGui::SetNextItemWidth(-1.0f);
+  ImGui::SetNextItemWidth(width);
   return ImGui::InputTextWithHint(terminatedLabel.c_str(),
                                   terminatedHint.c_str(), &value, flags);
 }
