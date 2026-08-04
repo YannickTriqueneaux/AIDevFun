@@ -1,5 +1,6 @@
 #include "AssistantHost/AssistantPromptConfig.h"
 #include "AssistantHost/MidiAttachmentProvider.h"
+#include "AssistantProviders/Codex/CodexFeatureDetection.h"
 #include "AssistantProviders/Codex/CodexEventParser.h"
 
 #include <cstdint>
@@ -95,6 +96,20 @@ void TestCodexEventParsing() {
   Require(ParseEventLine("not json").events.empty(),
           "Malformed Codex output should be ignored safely.");
 }
+
+void TestCodexFeatureDetection() {
+  using AssistantProviders::Codex::FeatureListContains;
+  constexpr std::string_view features =
+      "shell_tool stable true\n"
+      "mcp_2026_07_28 under development false\n"
+      "unified_exec stable false\n";
+  Require(FeatureListContains(features, "mcp_2026_07_28"),
+          "A supported Codex feature was not detected.");
+  Require(!FeatureListContains(features, "mcp_2026_07_2"),
+          "Codex feature detection accepted a partial name.");
+  Require(!FeatureListContains("error: unknown command", "mcp_2026_07_28"),
+          "Invalid feature output should not enable a flag.");
+}
 } // namespace
 
 int main() {
@@ -102,6 +117,7 @@ int main() {
     TestAssistantPromptConfig();
     TestMidiParsing();
     TestCodexEventParsing();
+    TestCodexFeatureDetection();
     std::cout << "AssistantHost tests passed.\n";
     return 0;
   } catch (const std::exception &exception) {

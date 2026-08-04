@@ -211,6 +211,7 @@ endif()
 
 add_library(AssistantProviderCodex SHARED
     AssistantProviders/Codex/Source/CodexProvider.cpp
+    AssistantProviders/Codex/Source/CodexFeatureDetection.cpp
     AssistantProviders/Codex/Source/CodexEventParser.cpp)
 target_include_directories(AssistantProviderCodex PRIVATE
     AssistantProviders/Codex/Include Development/Include)
@@ -335,6 +336,7 @@ if(BUILD_TESTING)
         Tests/AssistantHostTests.cpp
         AssistantHost/Source/AssistantPromptConfig.cpp
         AssistantHost/Source/MidiAttachmentProvider.cpp
+        AssistantProviders/Codex/Source/CodexFeatureDetection.cpp
         AssistantProviders/Codex/Source/CodexEventParser.cpp
     )
     target_include_directories(

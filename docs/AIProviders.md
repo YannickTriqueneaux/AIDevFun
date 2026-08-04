@@ -77,10 +77,13 @@ ChatGPT credentials in this repository.
 Codex CLI through OpenAI's official Windows installer, run `codex login` when
 no cached session exists, and skip both steps when they are already complete.
 
-The provider enables Codex MCP tool discovery because current Codex CLI builds
-defer custom MCP tools until the model searches for a relevant operation. Each
-tool also declares MCP safety annotations, allowing read-only operations and
-controlled Game mutations to be handled according to their actual effects.
+The provider enables Codex MCP tool discovery when the installed CLI reports
+the corresponding feature flag. Current builds defer custom MCP tools until
+the model searches for a relevant operation, while older builds may not know
+that flag at all. Capability detection keeps those older installations usable
+instead of passing an unknown command-line option. Each tool also declares MCP
+safety annotations, allowing read-only operations and controlled Game mutations
+to be handled according to their actual effects.
 
 For a resumed Codex thread, the provider starts the fresh stdio MCP bridge with an inherited-guidance marker. The first prompt still has to inspect applicable skills and `Architecture.md`; later prompts in that same thread reuse the conversation context and are not gated on rereading identical documents. New applicable domains still require their skill.
 

@@ -1,3 +1,4 @@
+#include "AssistantProviders/Codex/CodexFeatureDetection.h"
 #include "AssistantProviders/Codex/CodexEventParser.h"
 #include "Development/AssistantProvider.h"
 
@@ -71,6 +72,28 @@ std::filesystem::path ResolveExecutable(std::string configured) {
   return "codex";
 }
 
+std::string ReadCodexFeatureList(const std::filesystem::path &executable) {
+#if defined(_WIN32)
+  const std::string command = "cmd /d /s /c \"\"" + executable.string() +
+                              "\" features list 2>&1\"";
+  std::array<char, 4096> buffer{};
+  std::string output;
+  FILE *pipe = _popen(command.c_str(), "r");
+  if (!pipe)
+    return {};
+  while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe)) {
+    output += buffer.data();
+    if (output.size() > 256 * 1024)
+      break;
+  }
+  const int exitCode = _pclose(pipe);
+  return exitCode == 0 ? output : std::string{};
+#else
+  static_cast<void>(executable);
+  return {};
+#endif
+}
+
 class CodexProvider final : public Development::AssistantProvider {
 public:
   CodexProvider(const char *settingsPath, const char *gameRoot)
@@ -85,6 +108,8 @@ public:
                        "GameToolsMcpServer.exe";
     model_ = settings.value("model", "");
     reasoningEffort_ = settings.value("reasoningEffort", "high");
+    enableMcpDiscovery_ = AssistantProviders::Codex::FeatureListContains(
+        ReadCodexFeatureList(executable_), "mcp_2026_07_28");
   }
 
   bool IsConfigured() const override { return !executable_.empty(); }
@@ -130,9 +155,10 @@ public:
     std::string command = "cmd /d /s /c \"\"" + executable_.string() +
                           "\" exec --json --color never --sandbox read-only "
                           "--disable shell_tool --disable unified_exec "
-                          "--enable mcp_2026_07_28 "
                           "--skip-git-repo-check -C \"" +
                           gameRoot_.string() + "\"";
+    if (enableMcpDiscovery_)
+      command += " --enable mcp_2026_07_28";
     command += " -c suppress_unstable_features_warning=true";
     std::string mcpPath = mcpExecutable_.generic_string();
     command += " -c \"mcp_servers.game_tools.command='" + mcpPath + "'\"";
@@ -230,6 +256,7 @@ private:
   std::filesystem::path mcpExecutable_;
   std::string model_;
   std::string reasoningEffort_;
+  bool enableMcpDiscovery_ = false;
   std::string displayName_ = "Codex (ChatGPT account)";
 };
 
