@@ -54,11 +54,12 @@ one-shot prompts.
 
 Requirements:
 
-- Windows
-- CMake 3.24 or newer
-- a C++20 compiler
-- Git
-- either a ChatGPT subscription signed in through Codex CLI, or an OpenAI API key
+- Windows 10 or 11 with PowerShell and Windows Package Manager (`winget`)
+
+`Start.bat` checks Git, CMake, Visual Studio C++ Build Tools, assistant
+configuration, and authentication. Already configured items are skipped. When
+a required development tool is missing, the script explains what is needed and
+asks for confirmation before installing it with `winget`.
 
 Run:
 
@@ -68,13 +69,22 @@ Start.bat
 
 `Start.bat`:
 
-1. checks the selected assistant provider configuration;
-2. requests an API key only when the OpenAI API provider is selected and none
-   is configured;
-3. lists the projects under `Games/` and offers to create a new one;
-4. asks which game to open, or asks for a name and copies `BaseGame`;
-5. configures and builds that game in its private build directory; and
-6. starts its Game and AI Assistant windows.
+1. checks and, with permission, installs missing development prerequisites;
+2. creates the local assistant configuration on a fresh clone and asks whether
+   to use Codex CLI or the OpenAI API;
+3. installs Codex CLI through OpenAI's official Windows installer when needed;
+4. opens the browser for ChatGPT sign-in when Codex is not authenticated, or
+   requests an API key when the OpenAI API provider is selected;
+5. lists the projects under `Games/` and offers to create a new one;
+6. asks which game to open, or asks for a name and copies `BaseGame`;
+7. configures and builds that game in its private build directory; and
+8. starts its Game and AI Assistant windows.
+
+A [free ChatGPT account](https://learn.chatgpt.com/docs/pricing) can be used to
+explore Codex with limited usage; a paid subscription is not required to
+start. Paid ChatGPT plans provide higher Codex limits. The OpenAI API
+alternative uses a separately billed API key. Codex authentication uses the
+official [browser sign-in flow](https://learn.chatgpt.com/docs/auth).
 
 A game can also be selected directly:
 

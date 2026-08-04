@@ -8,8 +8,7 @@ set "CONFIGURATION=Debug"
 set "GAME_COUNT=0"
 set "REQUESTED_GAME="
 set "PROFILE_ENABLED=OFF"
-set "OPENAI_CONFIG_SCRIPT=%PROJECT_ROOT%\AssistantHost\Config\ConfigureOpenAI.ps1"
-set "OPENAI_SETTINGS=%PROJECT_ROOT%\AssistantHost\Config\settings.json"
+set "SETUP_SCRIPT=%PROJECT_ROOT%\Tools\SetupDevelopmentEnvironment.ps1"
 
 :parse_arguments
 if "%~1"=="" goto :arguments_parsed
@@ -27,16 +26,18 @@ goto :parse_arguments
 
 :arguments_parsed
 
-if not exist "%OPENAI_CONFIG_SCRIPT%" (
-    echo OpenAI configuration helper not found: "%OPENAI_CONFIG_SCRIPT%"
+if not exist "%SETUP_SCRIPT%" (
+    echo Development setup helper not found: "%SETUP_SCRIPT%"
     exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%OPENAI_CONFIG_SCRIPT%" -SettingsPath "%OPENAI_SETTINGS%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" -RepositoryRoot "%PROJECT_ROOT%"
 if errorlevel 1 (
-    echo OpenAI configuration was cancelled or failed.
+    echo Development environment setup was cancelled or failed.
     exit /b 1
 )
+
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')"`) do set "PATH=%%P"
 
 if not exist "%GAMES_DIR%" (
     echo Games directory not found: "%GAMES_DIR%"

@@ -49,7 +49,7 @@ void ArenaDirector::Update(float deltaTime) {
                         static_cast<float>(GameConfig::PlayAreaHeight) - 20.0f};
   }
   spawnPending_ = true;
-  spawnCooldown_ = 0.1375f + RandomUnit() * 0.1875f;
+  spawnCooldown_ = 0.275f + RandomUnit() * 0.375f;
 }
 
 bool ArenaDirector::ConsumeEnemySpawn(Engine::Vector2 &position) {
@@ -134,7 +134,7 @@ void PlayerWeapon::Update(float deltaTime) {
   cooldown_ = std::max(0.0f, cooldown_ - deltaTime);
   if (trigger_ && cooldown_ <= 0.0f && !shotPending_) {
     shotPending_ = true;
-    cooldown_ = 0.16f;
+    cooldown_ = 0.32f;
   }
   trigger_ = false;
 }
@@ -199,7 +199,7 @@ void EnemyWeapon::Update(float deltaTime) {
   pendingDirection_ =
       Direction(owner->transform.position, target->transform.position);
   shotPending_ = true;
-  cooldown_ = 0.9f;
+  cooldown_ = 1.8f;
 }
 
 void EnemyWeapon::SaveState(StateWriter &writer) const {

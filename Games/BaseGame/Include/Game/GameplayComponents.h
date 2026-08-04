@@ -40,7 +40,7 @@ public:
 
 private:
   [[nodiscard]] float RandomUnit();
-  float spawnCooldown_ = 0.05f;
+  float spawnCooldown_ = 0.1f;
   std::uint32_t randomState_ = 0x51a7e5u;
   bool spawnPending_ = false;
   Engine::Vector2 pendingPosition_{};
@@ -126,7 +126,7 @@ public:
 
 private:
   ObjectRef<Engine::Gameplay::Entity> target_;
-  float cooldown_ = 0.8f;
+  float cooldown_ = 1.8f;
   bool shotPending_ = false;
   Engine::Vector2 pendingDirection_{};
 };

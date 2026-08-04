@@ -48,8 +48,8 @@ existing ChatGPT sign-in. Its settings are stored in
 {
   "executable": "",
   "gameToolsMcpExecutable": "",
-  "model": "gpt-5.5",
-  "reasoningEffort": "high"
+  "model": "",
+  "reasoningEffort": "low"
 }
 ```
 
@@ -57,7 +57,8 @@ existing ChatGPT sign-in. Its settings are stored in
   first checks `%APPDATA%/npm/codex.cmd`, then falls back to `codex` from
   `PATH`.
 - An empty `model` lets Codex use the model selected by the user's Codex
-  configuration or the current Codex default.
+  configuration or the current Codex default. This is the repository default
+  so new users receive a model compatible with their ChatGPT plan.
 - A non-empty `model` is passed explicitly to `codex exec --model`.
 - `reasoningEffort` is passed as Codex model configuration.
 - Pasted images are decoded to temporary files, passed with `--image`, and
@@ -71,6 +72,10 @@ Codex runs with its local shell disabled and its filesystem sandbox in
 read-only mode. Game reads, writes, builds, reloads, and recovery operations
 must use the restricted Game Tools MCP server. The provider does not store
 ChatGPT credentials in this repository.
+
+`Start.bat` uses `Tools/SetupDevelopmentEnvironment.ps1` to install a missing
+Codex CLI through OpenAI's official Windows installer, run `codex login` when
+no cached session exists, and skip both steps when they are already complete.
 
 The provider enables Codex MCP tool discovery because current Codex CLI builds
 defer custom MCP tools until the model searches for a relevant operation. Each
