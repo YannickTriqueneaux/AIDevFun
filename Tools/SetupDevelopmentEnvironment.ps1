@@ -154,30 +154,38 @@ function Ensure-AssistantSettings {
 }
 
 function Find-Codex {
-    $command = Find-CommandPath "codex"
-    if ($null -ne $command) {
-        return $command
-    }
     $candidates = @(
-        (Join-Path $env:APPDATA "npm\codex.cmd"),
-        (Join-Path $env:USERPROFILE ".local\bin\codex.exe")
+        (Join-Path $env:USERPROFILE ".local\bin\codex.exe"),
+        (Join-Path $env:APPDATA "npm\codex.cmd")
     )
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate) {
             return $candidate
         }
     }
-    return $null
+    return Find-CommandPath "codex"
 }
 
-function Test-CodexLogin {
+function Install-OfficialCodex {
+    Write-Host "Downloading and running the official Codex CLI installer..."
+    $installer = Invoke-RestMethod -Uri `
+        "https://chatgpt.com/codex/install.ps1"
+    Invoke-Expression $installer
+    Update-ProcessPath
+}
+
+function Get-CodexLoginStatus {
     param([string] $CodexPath)
 
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = "Continue"
-        & $CodexPath login status 2>&1 | Out-Null
-        return $LASTEXITCODE -eq 0
+        $output = @(& $CodexPath login status 2>&1) |
+            ForEach-Object { $_.ToString() }
+        return @{
+            Success = $LASTEXITCODE -eq 0
+            Output = ($output -join [Environment]::NewLine).Trim()
+        }
     }
     finally {
         $ErrorActionPreference = $previousPreference
@@ -204,11 +212,7 @@ function Ensure-Codex {
         if (-not (Read-Confirmation "Codex CLI is missing. Install it using the official OpenAI installer?")) {
             throw "Codex CLI is required by the selected assistant provider."
         }
-        Write-Host "Downloading and running the official Codex CLI installer..."
-        $installer = Invoke-RestMethod -Uri `
-            "https://chatgpt.com/codex/install.ps1"
-        Invoke-Expression $installer
-        Update-ProcessPath
+        Install-OfficialCodex
         $codex = Find-Codex
         if ($null -eq $codex) {
             throw "Codex installation completed, but the executable could not be found."
@@ -221,15 +225,44 @@ function Ensure-Codex {
     if ($LASTEXITCODE -ne 0) {
         throw "Codex CLI is installed but could not be started."
     }
-    if (-not (Test-CodexLogin -CodexPath $codex)) {
+
+    $loginStatus = Get-CodexLoginStatus -CodexPath $codex
+    $notAuthenticated = $loginStatus.Output -match `
+        '(?i)not logged in|not authenticated|login required|requires login'
+    if (-not $loginStatus.Success -and -not $notAuthenticated) {
+        Write-Host ""
+        Write-Host "The installed Codex CLI cannot load its current configuration:"
+        Write-Host $loginStatus.Output -ForegroundColor Yellow
+        if (-not (Read-Confirmation "Update Codex with the official OpenAI installer and retry?")) {
+            throw "Codex must be updated before this configuration can be used."
+        }
+        Install-OfficialCodex
+        $codex = Find-Codex
+        if ($null -eq $codex) {
+            throw "Codex update completed, but the executable could not be found."
+        }
+        & $codex --version
+        if ($LASTEXITCODE -ne 0) {
+            throw "The updated Codex CLI could not be started."
+        }
+        $loginStatus = Get-CodexLoginStatus -CodexPath $codex
+        $notAuthenticated = $loginStatus.Output -match `
+            '(?i)not logged in|not authenticated|login required|requires login'
+        if (-not $loginStatus.Success -and -not $notAuthenticated) {
+            throw "Codex still cannot load its configuration after the update: $($loginStatus.Output)"
+        }
+    }
+
+    if (-not $loginStatus.Success) {
         Write-Host ""
         Write-Host "Codex needs a ChatGPT account. The sign-in page will open in your browser."
         $loginExitCode = Invoke-CodexLogin -CodexPath $codex
         if ($loginExitCode -ne 0) {
             throw "Codex sign-in was cancelled or failed."
         }
-        if (-not (Test-CodexLogin -CodexPath $codex)) {
-            throw "Codex did not report a valid authenticated session."
+        $loginStatus = Get-CodexLoginStatus -CodexPath $codex
+        if (-not $loginStatus.Success) {
+            throw "Codex did not report a valid authenticated session: $($loginStatus.Output)"
         }
     } else {
         Write-Host "Codex authentication already configured."

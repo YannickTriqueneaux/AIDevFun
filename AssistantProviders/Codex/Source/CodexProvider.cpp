@@ -58,6 +58,18 @@ std::filesystem::path ResolveExecutable(std::string configured) {
   if (!configured.empty())
     return configured;
 #if defined(_WIN32)
+  std::array<wchar_t, 32768> userProfile{};
+  const DWORD userProfileLength = GetEnvironmentVariableW(
+      L"USERPROFILE", userProfile.data(),
+      static_cast<DWORD>(userProfile.size()));
+  if (userProfileLength > 0 && userProfileLength < userProfile.size()) {
+    const auto nativeCodex =
+        std::filesystem::path(
+            std::wstring_view(userProfile.data(), userProfileLength)) /
+        ".local/bin/codex.exe";
+    if (std::filesystem::exists(nativeCodex))
+      return nativeCodex;
+  }
   std::array<wchar_t, 32768> appData{};
   const DWORD length = GetEnvironmentVariableW(
       L"APPDATA", appData.data(), static_cast<DWORD>(appData.size()));
