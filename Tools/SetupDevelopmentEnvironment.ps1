@@ -170,7 +170,20 @@ function Install-OfficialCodex {
     Write-Host "Downloading and running the official Codex CLI installer..."
     $installer = Invoke-RestMethod -Uri `
         "https://chatgpt.com/codex/install.ps1"
-    Invoke-Expression $installer
+    $previousNonInteractive = $env:CODEX_NON_INTERACTIVE
+    try {
+        # Start.bat owns the setup flow. Prevent the upstream installer from
+        # launching an unrelated interactive Codex session after installation.
+        $env:CODEX_NON_INTERACTIVE = "1"
+        Invoke-Expression $installer
+    }
+    finally {
+        if ($null -eq $previousNonInteractive) {
+            Remove-Item Env:CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue
+        } else {
+            $env:CODEX_NON_INTERACTIVE = $previousNonInteractive
+        }
+    }
     Update-ProcessPath
 }
 
