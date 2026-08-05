@@ -104,6 +104,7 @@ function Ensure-AssistantSettings {
             $provider = [string] $settings.assistant.providerLibrary
             if ($provider -notin @(
                     "AssistantProviderCodex.dll",
+                    "AssistantProviderClaude.dll",
                     "AssistantProviderOpenAI.dll")) {
                 throw "Unsupported assistant provider: $provider"
             }
@@ -121,7 +122,8 @@ function Ensure-AssistantSettings {
     Write-Host ""
     Write-Host "Choose the AI assistant provider:"
     Write-Host "  1. Codex CLI with a ChatGPT account (recommended)"
-    Write-Host "  2. OpenAI API with usage-based billing"
+    Write-Host "  2. Claude Code with a Claude or Anthropic Console account"
+    Write-Host "  3. OpenAI API with usage-based billing"
     $selection = Read-Host "Provider [1]"
     if ([string]::IsNullOrWhiteSpace($selection)) {
         $selection = "1"
@@ -137,6 +139,15 @@ function Ensure-AssistantSettings {
             }
         }
         "2" {
+            $settings = @{
+                assistant = @{
+                    providerLibrary = "AssistantProviderClaude.dll"
+                    providerSettings = "ClaudeProvider.settings.json"
+                    promptConfig = "AssistantPrompts.json"
+                }
+            }
+        }
+        "3" {
             $settings = @{
                 assistant = @{
                     providerLibrary = "AssistantProviderOpenAI.dll"
@@ -282,6 +293,82 @@ function Ensure-Codex {
     }
 }
 
+function Find-Claude {
+    $candidates = @(
+        (Join-Path $env:USERPROFILE ".local\bin\claude.exe"),
+        (Join-Path $env:APPDATA "npm\claude.cmd")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+    return Find-CommandPath "claude"
+}
+
+function Install-OfficialClaude {
+    Write-Host "Downloading and running the official Claude Code installer..."
+    $installer = Invoke-RestMethod -Uri "https://claude.ai/install.ps1"
+    Invoke-Expression $installer
+    Update-ProcessPath
+}
+
+function Get-ClaudeAuthStatus {
+    param([string] $ClaudePath)
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = @(& $ClaudePath auth status --text 2>&1) |
+            ForEach-Object { $_.ToString() }
+        return @{
+            Success = $LASTEXITCODE -eq 0
+            Output = ($output -join [Environment]::NewLine).Trim()
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
+function Ensure-Claude {
+    $claude = Find-Claude
+    if ($null -eq $claude) {
+        if (-not (Read-Confirmation "Claude Code is missing. Install it using the official Anthropic installer?")) {
+            throw "Claude Code is required by the selected assistant provider."
+        }
+        Install-OfficialClaude
+        $claude = Find-Claude
+        if ($null -eq $claude) {
+            throw "Claude Code installation completed, but the executable could not be found."
+        }
+    } else {
+        Write-Host "Claude Code already installed: $claude"
+    }
+
+    & $claude --version
+    if ($LASTEXITCODE -ne 0) {
+        throw "Claude Code is installed but could not be started."
+    }
+
+    $authStatus = Get-ClaudeAuthStatus -ClaudePath $claude
+    if (-not $authStatus.Success) {
+        Write-Host ""
+        Write-Host "Claude Code requires Claude Pro, Max, Team, Enterprise, or an Anthropic Console account with billing."
+        Write-Host "The sign-in page will open in your browser."
+        & $claude auth login
+        if ($LASTEXITCODE -ne 0) {
+            throw "Claude Code sign-in was cancelled or failed."
+        }
+        $authStatus = Get-ClaudeAuthStatus -ClaudePath $claude
+        if (-not $authStatus.Success) {
+            throw "Claude Code did not report a valid authenticated session: $($authStatus.Output)"
+        }
+    } else {
+        Write-Host "Claude Code authentication already configured."
+    }
+}
+
 Write-Host "Checking the development environment..."
 Update-ProcessPath
 
@@ -323,6 +410,8 @@ if (-not (Test-Path -LiteralPath $openAISettingsPath)) {
 $selectedProvider = [string] $assistantSettings.assistant.providerLibrary
 if ($selectedProvider -eq "AssistantProviderCodex.dll") {
     Ensure-Codex
+} elseif ($selectedProvider -eq "AssistantProviderClaude.dll") {
+    Ensure-Claude
 } elseif ($selectedProvider -eq "AssistantProviderOpenAI.dll") {
     & $configureOpenAIPath -SettingsPath $assistantSettingsPath
     if ($LASTEXITCODE -ne 0) {

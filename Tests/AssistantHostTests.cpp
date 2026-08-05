@@ -2,6 +2,7 @@
 #include "AssistantHost/MidiAttachmentProvider.h"
 #include "AssistantProviders/Codex/CodexFeatureDetection.h"
 #include "AssistantProviders/Codex/CodexEventParser.h"
+#include "AssistantProviders/Claude/ClaudeEventParser.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -119,6 +120,36 @@ void TestCodexFeatureDetection() {
   Require(!FeatureListContains("error: unknown command", "mcp_2026_07_28"),
           "Invalid feature output should not enable a flag.");
 }
+
+void TestClaudeEventParsing() {
+  using Development::AssistantStreamEventType;
+  const auto init = AssistantProviders::Claude::ParseEventLine(
+      R"({"type":"system","subtype":"init","session_id":"session-1","mcp_servers":[{"name":"game_tools","status":"connected"}]})");
+  Require(init.sessionId == "session-1" && init.events.size() == 2,
+          "Claude initialization activity was not parsed.");
+
+  const auto failedInit = AssistantProviders::Claude::ParseEventLine(
+      R"({"type":"system","subtype":"init","session_id":"session-1","mcp_servers":[{"name":"game_tools","status":"failed"}]})");
+  Require(failedInit.failed && failedInit.error.find("game_tools") !=
+                                    std::string::npos,
+          "A required Claude MCP startup failure was not detected.");
+
+  const auto tool = AssistantProviders::Claude::ParseEventLine(
+      R"({"type":"assistant","session_id":"session-1","message":{"content":[{"type":"tool_use","name":"mcp__game_tools__read_game_file"}]}})");
+  Require(tool.events.size() == 1 &&
+              tool.events[0].type == AssistantStreamEventType::Status &&
+              tool.events[0].text.find("game_tools.read_game_file") !=
+                  std::string::npos,
+          "Claude MCP tool activity was not parsed.");
+
+  const auto result = AssistantProviders::Claude::ParseEventLine(
+      R"({"type":"result","subtype":"success","is_error":false,"session_id":"session-1","result":"done","usage":{"input_tokens":10,"cache_read_input_tokens":4,"output_tokens":3}})");
+  Require(result.resultText == "done" && result.usage.has_value() &&
+              result.usage->inputTokens == 10 &&
+              result.usage->cachedInputTokens == 4 &&
+              result.usage->outputTokens == 3,
+          "Claude result or token usage was not parsed.");
+}
 } // namespace
 
 int main() {
@@ -127,6 +158,7 @@ int main() {
     TestMidiParsing();
     TestCodexEventParsing();
     TestCodexFeatureDetection();
+    TestClaudeEventParsing();
     std::cout << "AssistantHost tests passed.\n";
     return 0;
   } catch (const std::exception &exception) {

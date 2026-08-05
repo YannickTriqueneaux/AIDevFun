@@ -217,6 +217,14 @@ target_include_directories(AssistantProviderCodex PRIVATE
     AssistantProviders/Codex/Include Development/Include)
 target_link_libraries(AssistantProviderCodex PRIVATE nlohmann_json::nlohmann_json)
 
+add_library(AssistantProviderClaude SHARED
+    AssistantProviders/Claude/Source/ClaudeProvider.cpp
+    AssistantProviders/Claude/Source/ClaudeEventParser.cpp)
+target_include_directories(AssistantProviderClaude PRIVATE
+    AssistantProviders/Claude/Include Development/Include)
+target_link_libraries(AssistantProviderClaude PRIVATE
+    nlohmann_json::nlohmann_json)
+
 add_executable(GameToolsMcpServer
     AssistantProviders/Codex/Source/GameToolsMcpServer.cpp)
 target_include_directories(
@@ -227,7 +235,7 @@ target_compile_definitions(GameToolsMcpServer PRIVATE
     MAKE_YOUR_OWN_GAME_AI_GAME_PROJECT="${GAME_PROJECT}")
 
 add_dependencies(AssistantHost AssistantProviderOpenAI AssistantProviderCodex
-                 GameToolsMcpServer)
+                 AssistantProviderClaude GameToolsMcpServer)
 add_custom_command(
     TARGET AssistantHost
     POST_BUILD
@@ -243,6 +251,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_SOURCE_DIR}/AssistantProviders/Codex/CodexProvider.settings.json
         $<TARGET_FILE_DIR:AssistantHost>/CodexProvider.settings.json
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/AssistantProviders/Claude/ClaudeProvider.settings.json
+        $<TARGET_FILE_DIR:AssistantHost>/ClaudeProvider.settings.json
 )
 
 add_executable(Launcher Launcher/Source/main.cpp)
@@ -307,7 +318,8 @@ set_target_properties(GameRelease PROPERTIES
 )
 
 foreach(target Engine Game GameHost AssistantHost AssistantProviderOpenAI
-               AssistantProviderCodex GameToolsMcpServer Launcher GameRelease)
+               AssistantProviderCodex AssistantProviderClaude
+               GameToolsMcpServer Launcher GameRelease)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
     else()
@@ -338,10 +350,12 @@ if(BUILD_TESTING)
         AssistantHost/Source/MidiAttachmentProvider.cpp
         AssistantProviders/Codex/Source/CodexFeatureDetection.cpp
         AssistantProviders/Codex/Source/CodexEventParser.cpp
+        AssistantProviders/Claude/Source/ClaudeEventParser.cpp
     )
     target_include_directories(
         AssistantHostTests PRIVATE AssistantHost/Include
-        AssistantProviders/Codex/Include Development/Include)
+        AssistantProviders/Codex/Include AssistantProviders/Claude/Include
+        Development/Include)
     target_link_libraries(
         AssistantHostTests PRIVATE Engine nlohmann_json::nlohmann_json)
     if(WIN32)

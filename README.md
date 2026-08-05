@@ -71,9 +71,9 @@ Start.bat
 
 1. checks and, with permission, installs missing development prerequisites;
 2. creates the local assistant configuration on a fresh clone and asks whether
-   to use Codex CLI or the OpenAI API;
-3. installs Codex CLI through OpenAI's official Windows installer when needed;
-4. opens the browser for ChatGPT sign-in when Codex is not authenticated, or
+   to use Codex CLI, Claude Code, or the OpenAI API;
+3. installs the selected CLI through its official installer when needed;
+4. opens the browser when Codex or Claude Code is not authenticated, or
    requests an API key when the OpenAI API provider is selected;
 5. lists the projects under `Games/` and offers to create a new one;
 6. asks which game to open, or asks for a name and copies `BaseGame`;
@@ -85,6 +85,9 @@ explore Codex with limited usage; a paid subscription is not required to
 start. Paid ChatGPT plans provide higher Codex limits. The OpenAI API
 alternative uses a separately billed API key. Codex authentication uses the
 official [browser sign-in flow](https://learn.chatgpt.com/docs/auth).
+Claude Code requires a Claude Pro, Max, Team, or Enterprise plan, or an
+Anthropic Console account with billing enabled. Its setup uses Anthropic's
+official [native Windows installer and browser sign-in](https://code.claude.com/docs/en/getting-started).
 
 A game can also be selected directly:
 
@@ -311,6 +314,9 @@ Example:
 ```
 
 `AssistantProviderCodex.dll` uses the signed-in Codex CLI and ChatGPT account.
+`AssistantProviderClaude.dll` uses the signed-in Claude Code CLI and exposes
+the same restricted Game tools, web lookup, activity stream, image input, and
+conversation-resume workflow.
 `AssistantProviderOpenAI.dll` uses an API key. Each provider owns its separate
 settings file, and other providers can be integrated without adding their
 dependencies to AssistantHost or Engine.

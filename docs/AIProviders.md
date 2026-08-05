@@ -107,6 +107,41 @@ ignored for forward compatibility. Plain-text MCP diagnostics are surfaced in
 the activity console even when Codex exits successfully, and recent raw output
 is retained in CLI failure diagnostics.
 
+## Claude Code provider
+
+`AssistantProviderClaude.dll` launches the installed Claude Code CLI and uses
+its existing Claude or Anthropic Console authentication. Its settings are in
+`AssistantProviders/Claude/ClaudeProvider.settings.json`:
+
+```json
+{
+  "executable": "",
+  "gameToolsMcpExecutable": "",
+  "model": "",
+  "effort": "low"
+}
+```
+
+An empty executable checks the official native Windows location, the legacy
+npm location, and then `PATH`. Empty model selection preserves the user's
+Claude Code default. The provider sends prompts and pasted images through the
+official streaming JSON input format and resumes follow-ups with the returned
+Claude session ID.
+
+Claude runs with all local built-in tools disabled. Only `WebSearch`,
+`WebFetch`, and the restricted `game_tools` MCP server are exposed. Strict MCP
+configuration prevents unrelated user or project MCP servers from entering the
+embedded assistant session. The activity console reports session startup, MCP
+connection state, tool calls, reasoning summaries when supplied, completion,
+token usage, and raw MCP diagnostics. A failed `game_tools` connection fails
+the request instead of allowing Claude to continue without Game access.
+
+`Start.bat` can install Claude Code with Anthropic's official native Windows
+installer and invokes `claude auth login` only when `claude auth status` says
+the user is not signed in. Claude Code requires a compatible paid Claude plan
+or an Anthropic Console account with billing; the free Claude.ai plan does not
+include Claude Code.
+
 ## OpenAI API provider
 
 `AssistantProviderOpenAI.dll` calls the OpenAI Responses API. Its local settings
