@@ -27,6 +27,13 @@ The paths are resolved relative to the built `AssistantHost` executable. CMake
 copies the selected host settings, provider DLLs, and provider settings into
 the build output.
 
+On an already configured checkout, enter `A` in `Start.bat`'s game-selection
+menu to choose another provider. The setup script rewrites only the provider
+selection, reuses existing installations and authentication, and installs or
+signs in the newly selected CLI only when required. Declining a CLI sign-in
+returns to the provider selector rather than leaving startup trapped on the
+same unauthenticated provider.
+
 ## Shared assistant prompts
 
 `AssistantHost/Config/AssistantPrompts.json` contains the provider-neutral

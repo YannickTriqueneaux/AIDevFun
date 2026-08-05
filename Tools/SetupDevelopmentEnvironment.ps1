@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string] $RepositoryRoot
+    [string] $RepositoryRoot,
+    [switch] $ChangeAssistant
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,38 @@ $openAISettingsExamplePath = Join-Path $RepositoryRoot `
     "AssistantProviders\OpenAI\OpenAIProvider.settings.example.json"
 $configureOpenAIPath = Join-Path $RepositoryRoot `
     "AssistantHost\Config\ConfigureOpenAI.ps1"
+$previousAssistantSettings = $null
+if ($ChangeAssistant -and (Test-Path -LiteralPath $assistantSettingsPath)) {
+    $previousAssistantSettings = Get-Content `
+        -LiteralPath $assistantSettingsPath -Raw
+}
+
+function Cancel-AssistantChange {
+    param([string] $Message = "Assistant change cancelled.")
+
+    if ($ChangeAssistant -and $null -ne $previousAssistantSettings) {
+        [System.IO.File]::WriteAllText(
+            $assistantSettingsPath,
+            $previousAssistantSettings,
+            [System.Text.UTF8Encoding]::new($false))
+        Write-Host "Previous assistant configuration restored."
+    }
+    Write-Host $Message
+    exit 2
+}
+
+function Request-DifferentAssistant {
+    param([string] $Message = "Assistant sign-in cancelled.")
+
+    if ($null -ne $previousAssistantSettings) {
+        [System.IO.File]::WriteAllText(
+            $assistantSettingsPath,
+            $previousAssistantSettings,
+            [System.Text.UTF8Encoding]::new($false))
+        Write-Host "Previous assistant configuration restored."
+    }
+    throw [System.OperationCanceledException]::new($Message)
+}
 
 function Read-Confirmation {
     param([string] $Prompt)
@@ -97,7 +130,8 @@ function Get-MsvcInstallation {
 }
 
 function Ensure-AssistantSettings {
-    if (Test-Path -LiteralPath $assistantSettingsPath) {
+    if ((Test-Path -LiteralPath $assistantSettingsPath) -and
+        -not $ChangeAssistant) {
         try {
             $settings = Get-Content -LiteralPath $assistantSettingsPath -Raw |
                 ConvertFrom-Json
@@ -124,11 +158,17 @@ function Ensure-AssistantSettings {
     Write-Host "  1. Codex CLI with a ChatGPT account (recommended)"
     Write-Host "  2. Claude Code with a Claude or Anthropic Console account"
     Write-Host "  3. OpenAI API with usage-based billing"
+    if ($ChangeAssistant) {
+        Write-Host "  C. Cancel and keep the current assistant"
+    }
     $selection = Read-Host "Provider [1]"
     if ([string]::IsNullOrWhiteSpace($selection)) {
         $selection = "1"
     }
     switch ($selection) {
+        { $ChangeAssistant -and $_ -match '^[Cc]$' } {
+            Cancel-AssistantChange
+        }
         "1" {
             $settings = @{
                 assistant = @{
@@ -160,7 +200,7 @@ function Ensure-AssistantSettings {
     }
     $settings | ConvertTo-Json -Depth 4 |
         Set-Content -LiteralPath $assistantSettingsPath -Encoding UTF8
-    Write-Host "Assistant provider configuration created."
+    Write-Host "Assistant provider configuration saved."
     return $settings
 }
 
@@ -280,8 +320,15 @@ function Ensure-Codex {
     if (-not $loginStatus.Success) {
         Write-Host ""
         Write-Host "Codex needs a ChatGPT account. The sign-in page will open in your browser."
+        if (-not (Read-Confirmation "Continue with Codex sign-in?")) {
+            Request-DifferentAssistant
+        }
         $loginExitCode = Invoke-CodexLogin -CodexPath $codex
         if ($loginExitCode -ne 0) {
+            if ($ChangeAssistant) {
+                Request-DifferentAssistant `
+                    -Message "Codex sign-in was cancelled or failed."
+            }
             throw "Codex sign-in was cancelled or failed."
         }
         $loginStatus = Get-CodexLoginStatus -CodexPath $codex
@@ -356,8 +403,16 @@ function Ensure-Claude {
         Write-Host ""
         Write-Host "Claude Code requires Claude Pro, Max, Team, Enterprise, or an Anthropic Console account with billing."
         Write-Host "The sign-in page will open in your browser."
+        if (-not (Read-Confirmation "Continue with Claude Code sign-in?")) {
+            Request-DifferentAssistant
+        }
+        Write-Host "Press Ctrl+C if you need to cancel the Claude Code sign-in."
         & $claude auth login
         if ($LASTEXITCODE -ne 0) {
+            if ($ChangeAssistant) {
+                Request-DifferentAssistant `
+                    -Message "Claude Code sign-in was cancelled or failed."
+            }
             throw "Claude Code sign-in was cancelled or failed."
         }
         $authStatus = Get-ClaudeAuthStatus -ClaudePath $claude
@@ -396,8 +451,6 @@ if ($null -eq (Get-MsvcInstallation)) {
     Write-Host "Visual Studio C++ Build Tools already installed."
 }
 
-$assistantSettings = Ensure-AssistantSettings
-
 if (-not (Test-Path -LiteralPath $openAISettingsPath)) {
     if (-not (Test-Path -LiteralPath $openAISettingsExamplePath)) {
         throw "OpenAI provider settings example is missing."
@@ -407,15 +460,27 @@ if (-not (Test-Path -LiteralPath $openAISettingsPath)) {
     Write-Host "Created local OpenAI provider settings."
 }
 
-$selectedProvider = [string] $assistantSettings.assistant.providerLibrary
-if ($selectedProvider -eq "AssistantProviderCodex.dll") {
-    Ensure-Codex
-} elseif ($selectedProvider -eq "AssistantProviderClaude.dll") {
-    Ensure-Claude
-} elseif ($selectedProvider -eq "AssistantProviderOpenAI.dll") {
-    & $configureOpenAIPath -SettingsPath $assistantSettingsPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "OpenAI API configuration was cancelled or failed."
+while ($true) {
+    $assistantSettings = Ensure-AssistantSettings
+    $selectedProvider = [string] $assistantSettings.assistant.providerLibrary
+    try {
+        if ($selectedProvider -eq "AssistantProviderCodex.dll") {
+            Ensure-Codex
+        } elseif ($selectedProvider -eq "AssistantProviderClaude.dll") {
+            Ensure-Claude
+        } elseif ($selectedProvider -eq "AssistantProviderOpenAI.dll") {
+            & $configureOpenAIPath -SettingsPath $assistantSettingsPath
+            if ($LASTEXITCODE -ne 0) {
+                Request-DifferentAssistant `
+                    -Message "OpenAI API configuration was cancelled or failed."
+            }
+        }
+        break
+    }
+    catch [System.OperationCanceledException] {
+        Write-Host $_.Exception.Message
+        Write-Host "Choose another assistant, or enter C to cancel setup."
+        $ChangeAssistant = $true
     }
 }
 

@@ -44,15 +44,10 @@ if not exist "%GAMES_DIR%" (
     exit /b 1
 )
 
-echo.
-echo Available games:
-echo.
-
 for /d %%D in ("%GAMES_DIR%\*") do (
     if exist "%%~fD\Source\GameModule.cpp" (
         set /a GAME_COUNT+=1
         set "GAME_!GAME_COUNT!=%%~nxD"
-        echo   !GAME_COUNT!. %%~nxD
         if /I "%%~nxD"=="!REQUESTED_GAME!" set "SELECTED_GAME=%%~nxD"
     )
 )
@@ -72,10 +67,36 @@ if defined REQUESTED_GAME (
 )
 
 set /a CREATE_GAME_OPTION=GAME_COUNT+1
-echo   !CREATE_GAME_OPTION!. Create a new game
+:game_selection
 echo.
-set /p "GAME_SELECTION=Select a game [1-!CREATE_GAME_OPTION!]: "
+echo Available games:
+echo.
+for /L %%N in (1,1,!GAME_COUNT!) do echo   %%N. !GAME_%%N!
+echo   !CREATE_GAME_OPTION!. Create a new game
+echo   A. Change AI assistant
+echo.
+set "GAME_SELECTION="
+set /p "GAME_SELECTION=Select a game [1-!CREATE_GAME_OPTION!] or A: "
 
+if /I "!GAME_SELECTION!"=="A" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" -RepositoryRoot "%PROJECT_ROOT%" -ChangeAssistant
+    if errorlevel 2 (
+        echo.
+        echo Keeping the previous assistant.
+        goto :game_selection
+    )
+    if errorlevel 1 (
+        echo Assistant change was cancelled or failed.
+        exit /b 1
+    )
+    for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','Machine')+';'+[Environment]::GetEnvironmentVariable('Path','User')"`) do set "PATH=%%P"
+    echo.
+    echo Assistant changed successfully.
+    echo.
+    goto :game_selection
+)
+
+:validate_game_selection
 for /f "delims=0123456789" %%A in ("!GAME_SELECTION!") do (
     echo Invalid selection.
     exit /b 1

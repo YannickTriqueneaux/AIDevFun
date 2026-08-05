@@ -80,6 +80,14 @@ Start.bat
 7. configures and builds that game in its private build directory; and
 8. starts its Game and AI Assistant windows.
 
+The game-selection menu also accepts `A` to change the configured assistant at
+any time. After selecting Codex, Claude Code, or the OpenAI API, setup installs
+and authenticates only what the new provider still needs, then returns to the
+game menu. The provider menu and CLI sign-in confirmation can be cancelled;
+declining or abandoning a sign-in returns directly to the provider choices so
+another assistant can be selected without restarting `Start.bat`. Entering
+`C` cancels the overall change and preserves the previous configuration.
+
 A [free ChatGPT account](https://learn.chatgpt.com/docs/pricing) can be used to
 explore Codex with limited usage; a paid subscription is not required to
 start. Paid ChatGPT plans provide higher Codex limits. The OpenAI API
