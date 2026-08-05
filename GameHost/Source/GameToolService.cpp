@@ -714,7 +714,7 @@ std::string GameToolService::ReadCrashDiagnostics() const {
   constexpr std::size_t MaximumDiagnosticText = 256 * 1024;
   nlohmann::json reports = nlohmann::json::array();
 
-  const auto appendRecentFiles = [&reports](
+  const auto appendRecentFiles = [&reports, MaximumDiagnosticText](
                                      const std::filesystem::path &directory,
                                      std::string_view kind,
                                      std::string_view extension) {

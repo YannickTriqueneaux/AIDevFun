@@ -1,5 +1,7 @@
 #include "AssistantProviders/Codex/CodexEventParser.h"
 
+#include <algorithm>
+#include <cctype>
 #include <nlohmann/json.hpp>
 
 namespace AssistantProviders::Codex {
@@ -68,8 +70,19 @@ void AddStatus(ParsedEventLine &parsed, std::string text) {
 ParsedEventLine ParseEventLine(std::string_view line) {
   ParsedEventLine parsed;
   const nlohmann::json event = nlohmann::json::parse(line, nullptr, false);
-  if (event.is_discarded() || !event.is_object())
+  if (event.is_discarded() || !event.is_object()) {
+    std::string normalized(line);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char character) {
+                     return static_cast<char>(std::tolower(character));
+                   });
+    if (normalized.find("mcp") != std::string::npos) {
+      constexpr std::size_t MaximumDiagnosticLength = 2048;
+      std::string diagnostic(line.substr(0, MaximumDiagnosticLength));
+      AddStatus(parsed, "Codex MCP: " + diagnostic);
+    }
     return parsed;
+  }
 
   const std::string eventType = event.value("type", "");
   if (eventType == "thread.started") {

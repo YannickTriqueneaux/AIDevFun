@@ -67,6 +67,9 @@ existing ChatGPT sign-in. Its settings are stored in
 - An empty `gameToolsMcpExecutable` selects `GameToolsMcpServer.exe` beside the
   provider settings. The MCP server exposes the restricted Game tools and
   relays them to `GameToolService` through its existing named pipe.
+- The Game Tools MCP server is required and receives a 10-second startup
+  timeout. Codex therefore reports an initialization failure instead of
+  silently continuing without the tools needed to inspect and modify the Game.
 
 Codex runs with its local shell disabled and its filesystem sandbox in
 read-only mode. Game reads, writes, builds, reloads, and recovery operations
@@ -81,9 +84,10 @@ The provider enables Codex MCP tool discovery when the installed CLI reports
 the corresponding feature flag. Current builds defer custom MCP tools until
 the model searches for a relevant operation, while older builds may not know
 that flag at all. Capability detection keeps those older installations usable
-instead of passing an unknown command-line option. Each tool also declares MCP
-safety annotations, allowing read-only operations and controlled Game mutations
-to be handled according to their actual effects.
+instead of passing an unknown command-line option. Detection runs lazily in the
+first prompt's background task so it cannot stall AssistantHost startup. Each
+tool also declares MCP safety annotations, allowing read-only operations and
+controlled Game mutations to be handled according to their actual effects.
 
 For a resumed Codex thread, the provider starts the fresh stdio MCP bridge with an inherited-guidance marker. The first prompt still has to inspect applicable skills and `Architecture.md`; later prompts in that same thread reuse the conversation context and are not gated on rereading identical documents. New applicable domains still require their skill.
 
@@ -99,8 +103,9 @@ The provider parses the JSON Lines stream from `codex exec --json` while Codex
 is running. Commands, file changes, tool calls, searches, reasoning summaries,
 completion status, and token usage are converted into the generic provider
 events displayed by the Assistant activity console. Unknown event types are
-ignored for forward compatibility, and recent raw output is retained in CLI
-failure diagnostics.
+ignored for forward compatibility. Plain-text MCP diagnostics are surfaced in
+the activity console even when Codex exits successfully, and recent raw output
+is retained in CLI failure diagnostics.
 
 ## OpenAI API provider
 

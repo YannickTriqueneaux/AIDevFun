@@ -95,6 +95,15 @@ void TestCodexEventParsing() {
           "Unknown Codex events should be ignored safely.");
   Require(ParseEventLine("not json").events.empty(),
           "Malformed Codex output should be ignored safely.");
+
+  const auto mcpDiagnostic = ParseEventLine(
+      "MCP startup interrupted: game_tools failed to initialize");
+  Require(mcpDiagnostic.events.size() == 1 &&
+              mcpDiagnostic.events[0].type ==
+                  AssistantStreamEventType::Status &&
+              mcpDiagnostic.events[0].text.find("game_tools") !=
+                  std::string::npos,
+          "Plain-text Codex MCP diagnostics were not surfaced.");
 }
 
 void TestCodexFeatureDetection() {

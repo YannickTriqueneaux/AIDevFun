@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 
@@ -120,8 +121,6 @@ public:
                        "GameToolsMcpServer.exe";
     model_ = settings.value("model", "");
     reasoningEffort_ = settings.value("reasoningEffort", "high");
-    enableMcpDiscovery_ = AssistantProviders::Codex::FeatureListContains(
-        ReadCodexFeatureList(executable_), "mcp_2026_07_28");
   }
 
   bool IsConfigured() const override { return !executable_.empty(); }
@@ -164,6 +163,14 @@ public:
     }
     onEvent({Development::AssistantStreamEventType::Status,
              "Codex is working through the ChatGPT account."});
+    onEvent({Development::AssistantStreamEventType::Status,
+             "Checking Codex MCP compatibility."});
+    std::call_once(mcpFeatureDetectionOnce_, [this]() {
+      enableMcpDiscovery_ = AssistantProviders::Codex::FeatureListContains(
+          ReadCodexFeatureList(executable_), "mcp_2026_07_28");
+    });
+    onEvent({Development::AssistantStreamEventType::Status,
+             "Starting required Game tools (up to 10 seconds)."});
     std::string command = "cmd /d /s /c \"\"" + executable_.string() +
                           "\" exec --json --color never --sandbox read-only "
                           "--disable shell_tool --disable unified_exec "
@@ -174,6 +181,8 @@ public:
     command += " -c suppress_unstable_features_warning=true";
     std::string mcpPath = mcpExecutable_.generic_string();
     command += " -c \"mcp_servers.game_tools.command='" + mcpPath + "'\"";
+    command += " -c mcp_servers.game_tools.required=true";
+    command += " -c mcp_servers.game_tools.startup_timeout_sec=10";
     if (!model_.empty())
       command += " --model \"" + model_ + "\"";
     if (!reasoningEffort_.empty())
@@ -268,7 +277,8 @@ private:
   std::filesystem::path mcpExecutable_;
   std::string model_;
   std::string reasoningEffort_;
-  bool enableMcpDiscovery_ = false;
+  mutable std::once_flag mcpFeatureDetectionOnce_;
+  mutable bool enableMcpDiscovery_ = false;
   std::string displayName_ = "Codex (ChatGPT account)";
 };
 
