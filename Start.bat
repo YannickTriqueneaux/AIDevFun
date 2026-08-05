@@ -72,11 +72,12 @@ echo.
 echo Available games:
 echo.
 for /L %%N in (1,1,!GAME_COUNT!) do echo   %%N. !GAME_%%N!
-echo   !CREATE_GAME_OPTION!. Create a new game
-echo   A. Change AI assistant
+powershell -NoProfile -Command "Write-Host '  !CREATE_GAME_OPTION!. Create a new game' -ForegroundColor Yellow"
+echo.
+powershell -NoProfile -Command "Write-Host '  a. Change AI assistant' -ForegroundColor DarkGray"
 echo.
 set "GAME_SELECTION="
-set /p "GAME_SELECTION=Select a game [1-!CREATE_GAME_OPTION!] or A: "
+set /p "GAME_SELECTION=Select a game [1-!CREATE_GAME_OPTION!] or a: "
 
 if /I "!GAME_SELECTION!"=="A" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" -RepositoryRoot "%PROJECT_ROOT%" -ChangeAssistant
